@@ -15,9 +15,7 @@
 		]
 	},
 	"require": {
-		"composer-plugin-api": "^1.1",
-		"wp-phpunit/wp-phpunit": "5.3.0",
-		"phpunit/phpunit": "^7.1.4"
+		"composer-plugin-api": "^1.1"
 	},
 	"extra": {
 		"class": "Altis\\Dev_Tools\\Command\\Plugin"
