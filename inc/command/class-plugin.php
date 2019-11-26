@@ -4,11 +4,12 @@ namespace Altis\Dev_Tools\Command;
 
 use Composer\Composer;
 use Composer\EventDispatcher\EventSubscriberInterface;
+use Composer\IO\IOInterface;
 use Composer\Plugin\Capable;
 use Composer\Plugin\PluginInterface;
 
 class Plugin implements PluginInterface, Capable, EventSubscriberInterface {
-	public function activate( Composer $composer ) {
+	public function activate( Composer $composer, IOInterface $io ) {
 		$this->composer = $composer;
 	}
 
