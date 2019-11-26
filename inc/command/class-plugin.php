@@ -34,7 +34,7 @@ class Plugin implements PluginInterface, Capable, EventSubscriberInterface {
 	 * Install Travis CI configs.
 	 */
 	public function install_files() {
-		$source = dirname( __DIR__, 2 );
+		$source = $this->composer->getConfig()->get( 'vendor-dir' ) . '/altis/dev-tools';
 		$dest   = dirname( $this->composer->getConfig()->get( 'vendor-dir' ) );
 
 		// Copy default tests file.
