@@ -89,7 +89,6 @@ EOT
 
 		// Write XML config.
 		$doc = new DOMDocument( '1.0', 'utf-8' );
-		$doc->formatOutput = true; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.NotSnakeCaseMemberVar
 
 		// Create PHPUnit Element.
 		$phpunit = $doc->createElement( 'phpunit' );
