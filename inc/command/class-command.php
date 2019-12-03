@@ -3,6 +3,7 @@
 namespace Altis\Dev_Tools\Command;
 
 use Composer\Command\BaseCommand;
+use DOMDocument;
 use Symfony\Component\Console\Exception\CommandNotFoundException;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputArgument;
@@ -66,10 +67,98 @@ EOT
 	protected function phpunit( InputInterface $input, OutputInterface $output ) {
 		$options = [];
 
+		// Get dev-tools config.
+		$config = $this->get_config()['phpunit'] ?? [];
+
+		// Set default directories.
+		$directories = [ 'tests' ];
+
+		// Get directories from config.
+		if ( isset( $config['directories'] ) ) {
+			$directories = array_merge( (array) $config['directories'], $directories );
+		}
+
+		$directories = array_map( function ( $path ) {
+			return trim( $path, DIRECTORY_SEPARATOR );
+		}, $directories );
+		$directories = array_filter( $directories, function ( $path ) {
+			$full_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . $path;
+			return is_dir( $full_path );
+		} );
+		$directories = array_unique( $directories );
+
+		// Write XML config.
+		$doc = new DOMDocument( '1.0', 'utf-8' );
+		$doc->formatOutput = true; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.NotSnakeCaseMemberVar
+
+		// Create PHPUnit Element.
+		$phpunit = $doc->createElement( 'phpunit' );
+		$phpunit->setAttribute( 'bootstrap', 'altis/dev-tools/inc/phpunit/bootstrap.php' );
+		$phpunit->setAttribute( 'backupGlobals', 'false' );
+		$phpunit->setAttribute( 'colors', 'true' );
+		$phpunit->setAttribute( 'convertErrorsToExceptions', 'true' );
+		$phpunit->setAttribute( 'convertNoticesToExceptions', 'true' );
+		$phpunit->setAttribute( 'convertWarningsToExceptions', 'true' );
+
+		// Allow overrides and additional attributes.
+		if ( isset( $config['attributes'] ) ) {
+			foreach ( $config['attributes'] as $name => $value ) {
+				$phpunit->setAttribute( $name, $value );
+			}
+		}
+
+		// Create testsuites.
+		$testsuites = $doc->createElement( 'testsuites' );
+
+		// Create testsuite.
+		$testsuite = $doc->createElement( 'testsuite' );
+		$testsuite->setAttribute( 'name', 'project' );
+
+		foreach ( $directories as $directory ) {
+			$tag = $doc->createElement( 'directory', "../{$directory}/" );
+			// class-test-*.php
+			$variant = $tag->cloneNode( true );
+			$variant->setAttribute( 'prefix', 'class-test-' );
+			$variant->setAttribute( 'suffix', '.php' );
+			$testsuite->appendChild( $variant );
+			// test-*.php
+			$variant = $tag->cloneNode( true );
+			$variant->setAttribute( 'prefix', 'test-' );
+			$variant->setAttribute( 'suffix', '.php' );
+			$testsuite->appendChild( $variant );
+			// *-test.php
+			$variant = $tag->cloneNode( true );
+			$variant->setAttribute( 'suffix', '-test.php' );
+			$testsuite->appendChild( $variant );
+		}
+
+		// Build the doc.
+		$doc->appendChild( $phpunit );
+		$phpunit->appendChild( $testsuites );
+		$testsuites->appendChild( $testsuite );
+
+		// Add extensions if set.
+		if ( isset( $config['extensions'] ) ) {
+			$extensions = $doc->createElement( 'extensions' );
+			foreach ( (array) $config['extensions'] as $class ) {
+				$extension = $doc->createElement( 'extension' );
+				$extension->setAttribute( 'class', $class );
+				$extensions->appendChild( $extension );
+			}
+			$phpunit->appendChild( $extensions );
+		}
+
+		// Write the file.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
+		file_put_contents(
+			$this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'phpunit.xml',
+			$doc->saveXML()
+		);
+
 		// Check for passed config option.
 		$input_options = implode( ' ', $input->getArgument( 'options' ) );
 		if ( ! preg_match( '/(-c|--configuration)\s+/', $input_options ) ) {
-			$options[] = '-c vendor/altis/dev-tools/inc/phpunit/phpunit.xml';
+			$options[] = '-c vendor/phpunit.xml';
 		}
 
 		return $this->run_command( $input, $output, 'vendor/bin/phpunit', $options );
