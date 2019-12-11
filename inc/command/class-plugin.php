@@ -50,7 +50,7 @@ class Plugin implements PluginInterface, Capable, EventSubscriberInterface {
 
 		// Reset ref.
 		$root_config = file_get_contents( $dest . '/.travis.yml' );
-		$root_config = preg_replace( '#altis\.yml@.*#', 'altis.yml@__ref', $root_config );
+		$root_config = preg_replace( '#altis\.yml@.*#', 'altis.yml@__ref_replace_me__', $root_config );
 
 		// Check files match.
 		$source_hash = md5( file_get_contents( $source . '/travis/project.yml' ) );
@@ -65,7 +65,7 @@ class Plugin implements PluginInterface, Capable, EventSubscriberInterface {
 			$ref = str_replace( 'dev-', '', $package->getPrettyVersion() );
 
 			// Write travis config with new ref.
-			$root_config = str_replace( '__ref', $ref, $root_config );
+			$root_config = str_replace( 'altis.yml@__ref_replace_me__', "altis.yml@{$ref}", $root_config );
 			file_put_contents( $dest . '/.travis.yml', $root_config );
 			return;
 		}
