@@ -46,21 +46,37 @@ class Plugin implements PluginInterface, Capable, EventSubscriberInterface {
 		// Create .travis.yml if one doesn't exist yet.
 		if ( ! file_exists( $dest . '/.travis.yml' ) ) {
 			copy( $source . '/travis/project.yml', $dest . '/.travis.yml' );
-			return;
 		}
+
+		// Reset ref.
+		$root_config = file_get_contents( $dest . '/.travis.yml' );
+		$root_config = preg_replace( '#altis\.yml@.*#', 'altis.yml@__ref', $root_config );
 
 		// Check files match.
 		$source_hash = md5( file_get_contents( $source . '/travis/project.yml' ) );
-		$dest_hash = md5( file_get_contents( $dest . '/.travis.yml' ) );
+		$dest_hash = md5( $root_config );
 
+		// If files match then update the ref.
 		if ( $source_hash === $dest_hash ) {
+			// Get dev tools package.
+			$package = $this->composer->getRepositoryManager()->getLocalRepository()->findPackage( 'altis/dev-tools', '*' );
+
+			// Get branch name or tag.
+			$ref = str_replace( 'dev-', '', $package->getPrettyVersion() );
+
+			// Write travis config with new ref.
+			$root_config = str_replace( '__ref', $ref, $root_config );
+			file_put_contents( $dest . '/.travis.yml', $root_config );
 			return;
 		}
 
 		// Files are mismatched, show a warning.
 		echo(
+			"\n" .
 			'The file .travis.yml does not match that required by Altis.' . "\n" .
-			'Follow the guide at https://www.altis-dxp.com/resources/docs/dev-tools/continuous-integration/ for help migrating.'
+			'See the file at: ' . $source . '/travis/project.yml' . "\n" .
+			'For more information follow this guide:' . "\n" .
+			'https://www.altis-dxp.com/resources/docs/dev-tools/continuous-integration/ ' . "\n"
 		);
 	}
 }
