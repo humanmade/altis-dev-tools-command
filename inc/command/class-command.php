@@ -157,7 +157,8 @@ EOT
 		// Check for passed config option.
 		$input_options = implode( ' ', $input->getArgument( 'options' ) );
 		if ( ! preg_match( '/(-c|--configuration)\s+/', $input_options ) ) {
-			$options[] = '-c vendor/phpunit.xml';
+			$options[] = '-c';
+			$options[] = 'vendor/phpunit.xml';
 		}
 
 		return $this->run_command( $input, $output, 'vendor/bin/phpunit', $options );
