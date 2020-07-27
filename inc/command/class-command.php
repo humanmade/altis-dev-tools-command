@@ -83,6 +83,9 @@ EOT
 		}, $directories );
 		$directories = array_filter( $directories, function ( $path ) {
 			$full_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . $path;
+			if ( strpos( $path, '*' ) !== false ) {
+				return ! empty( glob( $full_path ) );
+			}
 			return is_dir( $full_path );
 		} );
 		$directories = array_unique( $directories );
