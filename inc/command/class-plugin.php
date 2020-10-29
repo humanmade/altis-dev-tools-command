@@ -79,4 +79,16 @@ class Plugin implements PluginInterface, Capable, EventSubscriberInterface {
 			'https://www.altis-dxp.com/resources/docs/dev-tools/continuous-integration/ ' . "\n"
 		);
 	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	public function deactivate( Composer $composer, IOInterface $io ) {
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	public function uninstall( Composer $composer, IOInterface $io ) {
+	}
 }
