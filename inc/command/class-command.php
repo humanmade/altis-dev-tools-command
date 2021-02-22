@@ -70,25 +70,27 @@ EOT
 		// Get dev-tools config.
 		$config = $this->get_config()['phpunit'] ?? [];
 
-		// Set default directories.
-		$directories = [ 'tests' ];
+		// Set default directories and files.
+		$test_paths = [ 'tests' ];
 
-		// Get directories from config.
+		// Get directories and files from config.
 		if ( isset( $config['directories'] ) ) {
-			$directories = array_merge( (array) $config['directories'], $directories );
+			$test_paths = array_merge( (array) $config['directories'], $test_paths );
 		}
 
-		$directories = array_map( function ( $path ) {
+		$test_paths = array_map( function ( $path ) {
 			return trim( $path, DIRECTORY_SEPARATOR );
-		}, $directories );
-		$directories = array_filter( $directories, function ( $path ) {
-			$full_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . $path;
-			if ( strpos( $path, '*' ) !== false ) {
-				return ! empty( glob( $full_path ) );
-			}
-			return is_dir( $full_path );
-		} );
-		$directories = array_unique( $directories );
+		}, $test_paths );
+		$test_paths = array_filter( $test_paths, [ $this, 'is_valid_test_path' ] );
+		$test_paths = array_unique( $test_paths );
+
+		// Check last option for a specific file path and override config if so.
+		$options = $input->getArgument( 'options' );
+		$maybe_test_path = $options[ count( $options ) - 1 ] ?? false;
+		if ( $this->is_valid_test_path( $maybe_test_path ) ) {
+			array_pop( $options );
+			$test_paths = [ $maybe_test_path ];
+		}
 
 		// Write XML config.
 		$doc = new DOMDocument( '1.0', 'utf-8' );
@@ -116,22 +118,27 @@ EOT
 		$testsuite = $doc->createElement( 'testsuite' );
 		$testsuite->setAttribute( 'name', 'project' );
 
-		foreach ( $directories as $directory ) {
-			$tag = $doc->createElement( 'directory', "../{$directory}/" );
-			// class-test-*.php
-			$variant = $tag->cloneNode( true );
-			$variant->setAttribute( 'prefix', 'class-test-' );
-			$variant->setAttribute( 'suffix', '.php' );
-			$testsuite->appendChild( $variant );
-			// test-*.php
-			$variant = $tag->cloneNode( true );
-			$variant->setAttribute( 'prefix', 'test-' );
-			$variant->setAttribute( 'suffix', '.php' );
-			$testsuite->appendChild( $variant );
-			// *-test.php
-			$variant = $tag->cloneNode( true );
-			$variant->setAttribute( 'suffix', '-test.php' );
-			$testsuite->appendChild( $variant );
+		foreach ( $test_paths as $test_path ) {
+			if ( is_file( $this->get_root_dir() . DIRECTORY_SEPARATOR . $test_path ) ) {
+				$tag = $doc->createElement( 'file', "../{$test_path}/" );
+				$testsuite->appendChild( $tag );
+			} else {
+				$tag = $doc->createElement( 'directory', "../{$test_path}/" );
+				// class-test-*.php
+				$variant = $tag->cloneNode( true );
+				$variant->setAttribute( 'prefix', 'class-test-' );
+				$variant->setAttribute( 'suffix', '.php' );
+				$testsuite->appendChild( $variant );
+				// test-*.php
+				$variant = $tag->cloneNode( true );
+				$variant->setAttribute( 'prefix', 'test-' );
+				$variant->setAttribute( 'suffix', '.php' );
+				$testsuite->appendChild( $variant );
+				// *-test.php
+				$variant = $tag->cloneNode( true );
+				$variant->setAttribute( 'suffix', '-test.php' );
+				$testsuite->appendChild( $variant );
+			}
 		}
 
 		// Build the doc.
@@ -158,10 +165,11 @@ EOT
 		);
 
 		// Check for passed config option.
-		$input_options = implode( ' ', $input->getArgument( 'options' ) );
-		if ( ! preg_match( '/(-c|--configuration)\s+/', $input_options ) ) {
-			$options[] = '-c';
-			$options[] = 'vendor/phpunit.xml';
+		if ( ! preg_match( '/(-c|--configuration)\s+/', implode( ' ', $options ) ) ) {
+			$options = array_merge(
+				[ '-c', 'vendor/phpunit.xml' ],
+				$options
+			);
 		}
 
 		return $this->run_command( $input, $output, 'vendor/bin/phpunit', $options );
@@ -179,13 +187,11 @@ EOT
 	protected function run_command( InputInterface $input, OutputInterface $output, string $command, array $options = [] ) {
 		$use_chassis = $input->getOption( 'chassis' );
 		$cli = $this->getApplication()->find( $use_chassis ? 'chassis' : 'local-server' );
-		$input_options = $input->getArgument( 'options' );
 
 		// Add the command, default options and input options together.
 		$options = array_merge(
 			[ $command ],
-			$options,
-			$input_options
+			$options
 		);
 
 		$return_val = $cli->run( new ArrayInput( [
@@ -217,6 +223,23 @@ EOT
 		$composer_json = json_decode( $json, true );
 
 		return (array) ( $composer_json['extra']['altis']['modules'][ $module ] ?? [] );
+	}
+
+	/**
+	 * Check if a given path is valid for PHPUnit.
+	 *
+	 * @param string $path The filepath to check.
+	 * @return boolean
+	 */
+	protected function is_valid_test_path( string $path ) : bool {
+		$full_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . $path;
+		if ( strpos( $path, '*' ) !== false ) {
+			return ! empty( glob( $full_path ) );
+		}
+		if ( is_file( $full_path ) ) {
+			return in_array( pathinfo( $full_path, PATHINFO_EXTENSION ), [ 'php', 'inc' ], true );
+		}
+		return is_dir( $full_path );
 	}
 
 }
