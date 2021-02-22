@@ -71,25 +71,25 @@ EOT
 		$config = $this->get_config()['phpunit'] ?? [];
 
 		// Set default directories and files.
-		$directories = [ 'tests' ];
+		$test_paths = [ 'tests' ];
 
 		// Get directories and files from config.
 		if ( isset( $config['directories'] ) ) {
-			$directories = array_merge( (array) $config['directories'], $directories );
+			$test_paths = array_merge( (array) $config['directories'], $test_paths );
 		}
 
-		$directories = array_map( function ( $path ) {
+		$test_paths = array_map( function ( $path ) {
 			return trim( $path, DIRECTORY_SEPARATOR );
-		}, $directories );
-		$directories = array_filter( $directories, [ $this, 'is_valid_test_path' ] );
-		$directories = array_unique( $directories );
+		}, $test_paths );
+		$test_paths = array_filter( $test_paths, [ $this, 'is_valid_test_path' ] );
+		$test_paths = array_unique( $test_paths );
 
 		// Check last option for a specific file path and override config if so.
 		$options = $input->getArgument( 'options' );
-		$maybe_file_path = $options[ count( $options ) - 1 ] ?? false;
-		if ( $this->is_valid_test_path( $maybe_file_path ) ) {
+		$maybe_test_path = $options[ count( $options ) - 1 ] ?? false;
+		if ( $this->is_valid_test_path( $maybe_test_path ) ) {
 			array_pop( $options );
-			$directories = [ $maybe_file_path ];
+			$test_paths = [ $maybe_test_path ];
 		}
 
 		// Write XML config.
@@ -118,12 +118,12 @@ EOT
 		$testsuite = $doc->createElement( 'testsuite' );
 		$testsuite->setAttribute( 'name', 'project' );
 
-		foreach ( $directories as $directory ) {
-			if ( is_file( $this->get_root_dir() . DIRECTORY_SEPARATOR . $directory ) ) {
-				$tag = $doc->createElement( 'file', "../{$directory}/" );
+		foreach ( $test_paths as $test_path ) {
+			if ( is_file( $this->get_root_dir() . DIRECTORY_SEPARATOR . $test_path ) ) {
+				$tag = $doc->createElement( 'file', "../{$test_path}/" );
 				$testsuite->appendChild( $tag );
 			} else {
-				$tag = $doc->createElement( 'directory', "../{$directory}/" );
+				$tag = $doc->createElement( 'directory', "../{$test_path}/" );
 				// class-test-*.php
 				$variant = $tag->cloneNode( true );
 				$variant->setAttribute( 'prefix', 'class-test-' );
@@ -237,7 +237,7 @@ EOT
 			return ! empty( glob( $full_path ) );
 		}
 		if ( is_file( $full_path ) ) {
-			return pathinfo( $full_path, PATHINFO_EXTENSION ) === 'php';
+			return in_array( pathinfo( $full_path, PATHINFO_EXTENSION ), [ 'php', 'inc' ], true );
 		}
 		return is_dir( $full_path );
 	}
