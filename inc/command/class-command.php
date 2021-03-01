@@ -232,6 +232,9 @@ EOT
 	 * @return boolean
 	 */
 	protected function is_valid_test_path( string $path ) : bool {
+		if ( empty( $path ) ) {
+			return false;
+		}
 		$full_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . $path;
 		if ( strpos( $path, '*' ) !== false ) {
 			return ! empty( glob( $full_path ) );
