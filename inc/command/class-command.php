@@ -92,6 +92,14 @@ EOT
 			$test_paths = [ $maybe_test_path ];
 		}
 
+		// Get excludes from config.
+		$excludes = (array) ( $config['excludes'] ?? [] );
+		$excludes = array_map( function ( $path ) {
+			return trim( $path, DIRECTORY_SEPARATOR );
+		}, $excludes );
+		$excludes = array_filter( $excludes, [ $this, 'is_valid_test_path' ] );
+		$excludes = array_unique( $excludes );
+
 		// Write XML config.
 		$doc = new DOMDocument( '1.0', 'utf-8' );
 
@@ -139,6 +147,11 @@ EOT
 				$variant->setAttribute( 'suffix', '-test.php' );
 				$testsuite->appendChild( $variant );
 			}
+		}
+
+		foreach ( $excludes as $exclude ) {
+			$tag = $doc->createElement( 'exclude', "../{$exclude}/" );
+			$testsuite->appendChild( $tag );
 		}
 
 		// Build the doc.
