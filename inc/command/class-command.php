@@ -10,6 +10,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * Chassis command for Composer.
@@ -22,8 +23,9 @@ class Command extends BaseCommand {
 		$this->setName( 'dev-tools' );
 		$this->setDescription( 'Developer tools' );
 		$this->setDefinition( [
-			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit' ),
+			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit | codecept' ),
 			new InputOption( 'chassis', null, null, 'Run commands in the Local Chassis environment' ),
+			new InputOption( 'module', 'm', InputArgument::OPTIONAL, 'Run commands for a specific module', 'project' ),
 			new InputArgument( 'options', InputArgument::IS_ARRAY ),
 		] );
 		$this->setHelp(
@@ -35,6 +37,13 @@ To run PHPUnit integration tests:
                                 use `--` to separate arguments you want to
                                 pass to phpunit. Use the --chassis option
                                 if you are running Local Chassis.
+
+To run Codeception integration tests:
+    codecept [--chassis] -m <module> [--] [options]
+                                use `--` to separate arguments you want to
+                                pass to Codeception. Use the --chassis option
+                                if you are running Local Chassis. Use -m module
+                                to test an Altis module.
 EOT
 		);
 	}
@@ -51,6 +60,8 @@ EOT
 		switch ( $subcommand ) {
 			case 'phpunit':
 				return $this->phpunit( $input, $output );
+			case 'codecept':
+				return $this->codecept( $input, $output );
 
 			default:
 				throw new CommandNotFoundException( sprintf( 'Subcommand "%s" is not defined.', $subcommand ) );
@@ -189,13 +200,163 @@ EOT
 	}
 
 	/**
+	 * Runs Codecept with zero config by default.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 * @return int
+	 */
+	protected function codecept( InputInterface $input, OutputInterface $output ) {
+		$options = $input->getArgument( 'options' );
+		$module = $input->getOption( 'module' );
+		$tests_folder = $module !== 'project' ? "altis/$module/tests" : 'tests';
+
+		// Write the default config.
+		$config = [
+			'paths' => [
+				'tests' => $tests_folder,
+				'output' => 'altis/dev-tools/tests/_output',
+				'data' => 'altis/dev-tools/tests/_data',
+				'support' => 'altis/dev-tools/tests/_support',
+			],
+			'actor_suffix' => 'Tester',
+			'extensions' => [
+				'enabled' => [
+					'Codeception\Extension\RunFailed',
+				],
+				'commands' => [
+					'Codeception\Command\GenerateWPUnit',
+					'Codeception\Command\GenerateWPRestApi',
+					'Codeception\Command\GenerateWPRestController',
+					'Codeception\Command\GenerateWPRestPostTypeController',
+					'Codeception\Command\GenerateWPAjax',
+					'Codeception\Command\GenerateWPCanonical',
+					'Codeception\Command\GenerateWPXMLRPC',
+				],
+			],
+			'modules' => [
+				'config' => [
+					'WPDb' => [
+						'dsn' => '%TEST_SITE_DB_DSN%',
+						'user' => '%TEST_SITE_DB_USER%',
+						'password' => '%TEST_SITE_DB_PASSWORD%',
+						'dump' => '%TEST_SITE_DB_DUMP%',
+						'populate' => true,
+						'cleanup' => true,
+						'waitlock' => 10,
+						'url' => '%TEST_SITE_WP_URL%',
+						'urlReplacement' => true,
+						'tablePrefix' => '%TEST_SITE_TABLE_PREFIX%',
+					],
+					'WPBrowser' => [
+						'url' => '%TEST_SITE_WP_URL%',
+						'adminUsername' => '%TEST_SITE_ADMIN_USERNAME%',
+						'adminPassword' => '%TEST_SITE_ADMIN_PASSWORD%',
+						'adminPath' => '%TEST_SITE_WP_ADMIN_PATH%',
+						'headers' => [
+							'X_TEST_REQUEST' => 1,
+							'X_WPBROWSER_REQUEST' => 1,
+						],
+					],
+					'WPFilesystem' => [
+						'wpRootFolder' => '%WP_ROOT_FOLDER%',
+						'plugins' => '.%WP_CONTENT_FOLDER%/plugins',
+						'mu-plugins' => '%WP_CONTENT_FOLDER%/mu-plugins',
+						'themes' => '%WP_CONTENT_FOLDER%/themes',
+						'uploads' => '%WP_CONTENT_FOLDER%/uploads',
+					],
+					'WPLoader' => [
+						'wpRootFolder' => '%WP_ROOT_FOLDER%',
+						'dbName' => '%TEST_DB_NAME%',
+						'dbHost' => '%TEST_DB_HOST%',
+						'dbUser' => '%TEST_DB_USER%',
+						'dbPassword' => '%TEST_DB_PASSWORD%',
+						'tablePrefix' => '%TEST_TABLE_PREFIX%',
+						'domain' => '%TEST_SITE_WP_DOMAIN%',
+						'adminEmail' => '%TEST_SITE_ADMIN_EMAIL%',
+						'title' => 'Test',
+						'theme' => 'default',
+						'plugins' => [],
+						'activatePlugins' => [],
+						'multisite' => true,
+						// 'configFile' => 'altis/dev-tools/inc/codeception/bootstrap.php',
+						'contentFolder' => 'content',
+						'bootstrapActions' => '',
+					],
+				],
+			],
+			'params' => [
+				'codeception.env',
+			],
+		];
+
+		// Merge config from composer.json.
+		$overrides = $this->get_config()['codeception'] ?? [];
+		$config = $this->merge_config( $config, $overrides );
+
+		// Convert to YAML.
+		$yaml = Yaml::dump( $config, 2, 4, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK );
+
+		// Write the file.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
+		file_put_contents(
+			$this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'codeception.yml',
+			$yaml
+		);
+
+		$test_env = <<<EOL
+TEST_SITE_DB_DSN=mysql:host=db;dbname=test
+TEST_SITE_DB_HOST=db
+TEST_SITE_DB_NAME=test
+TEST_SITE_DB_USER=wordpress
+TEST_SITE_DB_PASSWORD=wordpress
+TEST_SITE_DB_DUMP=altis/dev-tools/tests/_data/dump.sql
+TEST_SITE_TABLE_PREFIX=wp_
+TEST_SITE_ADMIN_USERNAME=admin
+TEST_SITE_ADMIN_PASSWORD=password
+TEST_SITE_WP_ADMIN_PATH=/wp-admin
+TEST_SITE_WP_URL=dev.altis.dev
+TEST_SITE_WP_DOMAIN=dev.altis.dev
+TEST_SITE_ADMIN_EMAIL=admin@example.org
+WP_ROOT_FOLDER=wordpress
+WP_CONTENT_FOLDER=../content
+TEST_DB_NAME=test2
+TEST_DB_HOST=db
+TEST_DB_USER=wordpress
+TEST_DB_PASSWORD=wordpress
+TEST_TABLE_PREFIX=wp_
+EOL;
+
+		// Write the env file.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
+		file_put_contents(
+			$this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'codeception.env',
+			$test_env
+		);
+
+		// // Check for passed config option.
+		if ( ! preg_match( '/(-c|--configuration)\s+/', implode( ' ', $options ) ) ) {
+			$options = array_merge(
+				[ '-c', 'vendor/codeception.yml' ],
+				$options
+			);
+		}
+
+		$this->create_test_db( $input, $output );
+		$return = $this->run_command( $input, $output, 'vendor/bin/codecept', $options );
+		$this->delete_test_db( $input, $output );
+
+		return $return;
+	}
+
+	/**
 	 * Run the passed command on either the local-server or local-chassis environment.
 	 *
 	 * @param InputInterface $input
 	 * @param OutputInterface $output
 	 * @param string $command The command to run.
 	 * @param array $options Any required options to pass to the command.
-	 * @return void
+	 * @return int
 	 */
 	protected function run_command( InputInterface $input, OutputInterface $output, string $command, array $options = [] ) {
 		$use_chassis = $input->getOption( 'chassis' );
@@ -210,6 +371,56 @@ EOT
 		$return_val = $cli->run( new ArrayInput( [
 			'subcommand' => 'exec',
 			'options' => $options,
+		] ), $output );
+
+		return $return_val;
+	}
+
+	/**
+	 * Create test databases.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function create_test_db( InputInterface $input, OutputInterface $output ) {
+		// TODO find out how to do the same for chassis
+		// $use_chassis = $input->getOption( 'chassis' );
+
+		$cli = $this->getApplication()->find( 'local-server' );
+
+		$return_val = $cli->run( new ArrayInput( [
+			'subcommand' => 'db',
+			'options' => [
+				'exec',
+				'CREATE DATABASE IF NOT EXISTS test; CREATE DATABASE IF NOT EXISTS test2; GRANT ALL PRIVILEGES ON test.* TO wordpress IDENTIFIED BY \"wordpress\"; GRANT ALL PRIVILEGES ON test2.* TO wordpress IDENTIFIED BY \"wordpress\";',
+			],
+		] ), $output );
+
+		return $return_val;
+	}
+
+	/**
+	 * Create test databases.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function delete_test_db( InputInterface $input, OutputInterface $output ) {
+		// TODO find out how to do the same for chassis
+		// $use_chassis = $input->getOption( 'chassis' );
+
+		$cli = $this->getApplication()->find( 'local-server' );
+
+		$return_val = $cli->run( new ArrayInput( [
+			'subcommand' => 'db',
+			'options' => [
+				'exec',
+				'DROP DATABASE test; DROP DATABASE test2; REVOKE ALL PRIVILEGES on test.* FROM wordpress; REVOKE ALL PRIVILEGES on test2.* FROM wordpress;',
+			],
 		] ), $output );
 
 		return $return_val;
@@ -256,6 +467,36 @@ EOT
 			return in_array( pathinfo( $full_path, PATHINFO_EXTENSION ), [ 'php', 'inc' ], true );
 		}
 		return is_dir( $full_path );
+	}
+
+	/**
+	 * Merges two configuration arrays together, overriding the first or adding
+	 * to it with items from the second.
+	 *
+	 * @param array $config The default config array.
+	 * @param array $overrides The config to merge in.
+	 * @return array
+	 */
+	protected function merge_config( array $config, array $overrides ) : array {
+		$merged = $config;
+		foreach ( $overrides as $key => $value ) {
+			if ( is_string( $key ) ) {
+				if ( is_array( $value ) ) {
+					// Recursively merge arrays.
+					$merged[ $key ] = $this->merge_config( $merged[ $key ] ?? [], $value );
+				} else {
+					// Overwrite scalar values directly.
+					$merged[ $key ] = $value;
+				}
+			} else {
+				// Merge numerically keyed arrays directly and remove empty/duplicate items.
+				$merged = array_merge( $merged, (array) $overrides );
+				$merged = array_filter( $merged );
+				$merged = array_unique( $merged );
+				break;
+			}
+		}
+		return $merged;
 	}
 
 }
