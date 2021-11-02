@@ -210,6 +210,7 @@ EOT
 		$options = $input->getArgument( 'options' );
 		$module = $input->getOption( 'module' );
 		$tests_folder = $module !== 'project' ? "altis/$module/tests" : 'tests';
+		$use_chassis = $input->getOption( 'chassis' );
 
 		// Write the default config.
 		$config = [
@@ -304,9 +305,10 @@ EOT
 			$yaml
 		);
 
+		$db_host = $use_chassis ? 'localhost' : 'db';
 		$test_env = <<<EOL
-TEST_SITE_DB_DSN=mysql:host=db;dbname=test
-TEST_SITE_DB_HOST=db
+TEST_SITE_DB_DSN=mysql:host=$db_host;dbname=test
+TEST_SITE_DB_HOST=$db_host
 TEST_SITE_DB_NAME=test
 TEST_SITE_DB_USER=wordpress
 TEST_SITE_DB_PASSWORD=wordpress
@@ -321,7 +323,7 @@ TEST_SITE_ADMIN_EMAIL=admin@example.org
 WP_ROOT_FOLDER=wordpress
 WP_CONTENT_FOLDER=../content
 TEST_DB_NAME=test2
-TEST_DB_HOST=db
+TEST_DB_HOST=$db_host
 TEST_DB_USER=wordpress
 TEST_DB_PASSWORD=wordpress
 TEST_TABLE_PREFIX=wp_
@@ -385,18 +387,32 @@ EOL;
 	 * @return int
 	 */
 	protected function create_test_db( InputInterface $input, OutputInterface $output ) {
-		// TODO find out how to do the same for chassis
-		// $use_chassis = $input->getOption( 'chassis' );
+		$use_chassis = $input->getOption( 'chassis' );
 
-		$cli = $this->getApplication()->find( 'local-server' );
+		if ( $use_chassis ) {
+			$cli = $this->getApplication()->find( 'chassis' );
 
-		$return_val = $cli->run( new ArrayInput( [
-			'subcommand' => 'db',
-			'options' => [
-				'exec',
-				'CREATE DATABASE IF NOT EXISTS test; CREATE DATABASE IF NOT EXISTS test2; GRANT ALL PRIVILEGES ON test.* TO wordpress IDENTIFIED BY \"wordpress\"; GRANT ALL PRIVILEGES ON test2.* TO wordpress IDENTIFIED BY \"wordpress\";',
-			],
-		] ), $output );
+			$return_val = $cli->run( new ArrayInput( [
+				'subcommand' => 'exec',
+				'options' => [
+					'mysql',
+					'-uroot',
+					'-ppassword',
+					'-e',
+					'"CREATE DATABASE IF NOT EXISTS test; CREATE DATABASE IF NOT EXISTS test2; GRANT ALL PRIVILEGES ON test.* TO wordpress@localhost IDENTIFIED BY \"wordpress\"; GRANT ALL PRIVILEGES ON test2.* TO wordpress@localhost IDENTIFIED BY \"wordpress\";"',
+				],
+			] ), $output );
+		} else {
+			$cli = $this->getApplication()->find( 'local-server' );
+
+			$return_val = $cli->run( new ArrayInput( [
+				'subcommand' => 'db',
+				'options' => [
+					'exec',
+					'CREATE DATABASE IF NOT EXISTS test; CREATE DATABASE IF NOT EXISTS test2; GRANT ALL PRIVILEGES ON test.* TO wordpress IDENTIFIED BY \"wordpress\"; GRANT ALL PRIVILEGES ON test2.* TO wordpress IDENTIFIED BY \"wordpress\";',
+				],
+			] ), $output );
+		}
 
 		return $return_val;
 	}
@@ -410,18 +426,32 @@ EOL;
 	 * @return int
 	 */
 	protected function delete_test_db( InputInterface $input, OutputInterface $output ) {
-		// TODO find out how to do the same for chassis
-		// $use_chassis = $input->getOption( 'chassis' );
+		$use_chassis = $input->getOption( 'chassis' );
 
-		$cli = $this->getApplication()->find( 'local-server' );
+		if ( $use_chassis ) {
+			$cli = $this->getApplication()->find( 'chassis' );
 
-		$return_val = $cli->run( new ArrayInput( [
-			'subcommand' => 'db',
-			'options' => [
-				'exec',
-				'DROP DATABASE test; DROP DATABASE test2; REVOKE ALL PRIVILEGES on test.* FROM wordpress; REVOKE ALL PRIVILEGES on test2.* FROM wordpress;',
-			],
-		] ), $output );
+			$return_val = $cli->run( new ArrayInput( [
+				'subcommand' => 'exec',
+				'options' => [
+					'mysql',
+					'-uroot',
+					'-ppassword',
+					'-e',
+					'"DROP DATABASE test; DROP DATABASE test2; REVOKE ALL PRIVILEGES on test.* FROM wordpress; REVOKE ALL PRIVILEGES on test2.* FROM wordpress;"',
+				],
+			] ), $output );
+		} else {
+			$cli = $this->getApplication()->find( 'local-server' );
+
+			$return_val = $cli->run( new ArrayInput( [
+				'subcommand' => 'db',
+				'options' => [
+					'exec',
+					'DROP DATABASE test; DROP DATABASE test2; REVOKE ALL PRIVILEGES on test.* FROM wordpress; REVOKE ALL PRIVILEGES on test2.* FROM wordpress;',
+				],
+			] ), $output );
+		}
 
 		return $return_val;
 	}
