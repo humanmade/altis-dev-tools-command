@@ -280,9 +280,11 @@ EOT
 						'plugins' => [],
 						'activatePlugins' => [],
 						'multisite' => true,
-						// 'configFile' => 'altis/dev-tools/inc/codeception/bootstrap.php',
+						'configFile' => 'altis/dev-tools/inc/codeception/config.php',
 						'contentFolder' => 'content',
-						'bootstrapActions' => '',
+						'bootstrapActions' => [
+							'bootstrapCCWP',
+						],
 					],
 				],
 			],
