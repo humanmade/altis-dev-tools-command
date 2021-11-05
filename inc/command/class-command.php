@@ -283,6 +283,14 @@ EOT
 									'--user-agent=wp-browser',
 								],
 							],
+							'moz:firefoxOptions' => [
+								'args' => [
+									'-headless',
+								],
+								'prefs' => [
+									'general.useragent.override' => 'wp-browser',
+								],
+							],
 						],
 					],
 					'WPFilesystem' => [
