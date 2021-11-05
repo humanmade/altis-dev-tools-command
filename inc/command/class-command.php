@@ -26,6 +26,7 @@ class Command extends BaseCommand {
 			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit | codecept' ),
 			new InputOption( 'chassis', null, null, 'Run commands in the Local Chassis environment' ),
 			new InputOption( 'module', 'm', InputArgument::OPTIONAL, 'Run commands for a specific module', 'project' ),
+			new InputOption( 'browser', 'b', InputArgument::OPTIONAL, 'Run a headless Chrome browser for acceptance tests, use "chrome", "firefox", or "edge"', '' ),
 			new InputArgument( 'options', InputArgument::IS_ARRAY ),
 		] );
 		$this->setHelp(
@@ -39,11 +40,13 @@ To run PHPUnit integration tests:
                                 if you are running Local Chassis.
 
 To run Codeception integration tests:
-    codecept [--chassis] -m <module> [--] [options]
+    codecept [--chassis] -m <module> -b <browser> [--] [options]
                                 use `--` to separate arguments you want to
                                 pass to Codeception. Use the --chassis option
                                 if you are running Local Chassis. Use -m module
-                                to test an Altis module.
+                                to test an Altis module. Use --browser/-b to run
+                                a headless browser container for acceptance tests,
+                                choose 'chrome', 'firefix', or 'edge' as needed.
 EOT
 		);
 	}
@@ -209,8 +212,10 @@ EOT
 	protected function codecept( InputInterface $input, OutputInterface $output ) {
 		$options = $input->getArgument( 'options' );
 		$module = $input->getOption( 'module' );
-		$tests_folder = $module !== 'project' ? "altis/$module/tests" : 'tests';
+		$run_headless_browser = $input->getOption( 'browser' );
 		$use_chassis = $input->getOption( 'chassis' );
+		$tests_folder = $module !== 'project' ? "altis/$module/tests" : 'tests';
+		$project_subdomain = $this->get_project_subdomain();
 
 		// Write the default config.
 		$config = [
@@ -257,6 +262,26 @@ EOT
 						'headers' => [
 							'X_TEST_REQUEST' => 1,
 							'X_WPBROWSER_REQUEST' => 1,
+						],
+					],
+					'WPWebDriver' => [
+						'url' => '%TEST_SITE_WP_URL%',
+						'adminUsername' => '%TEST_SITE_ADMIN_USERNAME%',
+						'adminPassword' => '%TEST_SITE_ADMIN_PASSWORD%',
+						'adminPath' => '%TEST_SITE_WP_ADMIN_PATH%',
+						'browser' => $run_headless_browser,
+						'host' => $project_subdomain . '_selenium',
+						'port' => '4444',
+						'window_size' => false, // disabled for Chrome driver.
+						'capabilities' => [
+							'chromeOptions' => [
+								'args' => [
+									'--headless',
+									'--disable-gpu',
+									'--proxy-server=\'direct://\'',
+									'--proxy-bypass-list=*',
+								],
+							],
 						],
 					],
 					'WPFilesystem' => [
@@ -347,7 +372,21 @@ EOL;
 		}
 
 		$this->create_test_db( $input, $output );
+
+		// Run the headless browser container if needed.
+		if ( $run_headless_browser ) {
+			// Stop any lingering containers first.
+			$this->stop_browser_container( $input, $output );
+			// Run a new container.
+			$this->run_browser_container( $input, $output );
+			// Stop the container on shutdown.
+			register_shutdown_function( function() use ( $input, $output ) {
+				$this->stop_browser_container( $input, $output );
+			} );
+		}
+
 		$return = $this->run_command( $input, $output, 'vendor/bin/codecept', $options );
+
 		$this->delete_test_db( $input, $output );
 
 		return $return;
@@ -456,6 +495,85 @@ EOL;
 		}
 
 		return $return_val;
+	}
+
+	/**
+	 * Get the name of the project for the local subdomain
+	 *
+	 * @return string
+	 */
+	protected function get_project_subdomain() : string {
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+		$composer_json = json_decode( file_get_contents( getcwd() . '/composer.json' ), true );
+
+		if ( isset( $composer_json['extra']['altis']['modules']['local-server']['name'] ) ) {
+			$project_name = $composer_json['extra']['altis']['modules']['local-server']['name'];
+		} else {
+			$project_name = basename( getcwd() );
+		}
+
+		return preg_replace( '/[^A-Za-z0-9\-\_]/', '', $project_name );
+	}
+
+	/**
+	 * Start a headless browser container for WebDriver used in acceptance tests.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function run_browser_container( InputInterface $input, OutputInterface $output ) {
+		$columns = exec( 'tput cols' );
+		$lines = exec( 'tput lines' );
+		$browser = $input->getOption( 'browser' );
+
+		$available_browsers = [
+			'chrome',
+			'firefox',
+			'edge',
+		];
+
+		if ( ! in_array( $browser, $available_browsers, true ) ) {
+			return 1;
+		}
+
+		$base_command = sprintf(
+			'docker run ' .
+				'-d ' .
+				'-e COLUMNS=%1%d -e LINES=%2$d ' .
+				'-p 4444:4444 ' .
+				'-p 7900:7900 ' .
+				'--network=%3$s_default ' .
+				'--name=%3$s_selenium ' .
+				'--shm-size="2g" ' .
+				'selenium/standalone-%4$s:4.0.0-20211102',
+			$columns,
+			$lines,
+			$this->get_project_subdomain(),
+			$browser,
+		);
+
+		passthru( $base_command, $return_var );
+
+		return $return_var;
+	}
+
+	/**
+	 * Stop the headless browser container.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function stop_browser_container( InputInterface $input, OutputInterface $output ) {
+		$base_command = sprintf( 'docker rm -f %1$s_selenium', $this->get_project_subdomain() );
+
+		passthru( $base_command, $return_var );
+
+		return $return_var;
 	}
 
 	/**
