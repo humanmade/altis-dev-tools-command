@@ -251,7 +251,7 @@ EOT
 						'cleanup' => true,
 						'waitlock' => 10,
 						'url' => '%TEST_SITE_WP_URL%',
-						'urlReplacement' => true,
+						'urlReplacement' => false,
 						'tablePrefix' => '%TEST_SITE_TABLE_PREFIX%',
 					],
 					'WPBrowser' => [
