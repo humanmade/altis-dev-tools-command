@@ -280,6 +280,7 @@ EOT
 									'--disable-gpu',
 									'--proxy-server=\'direct://\'',
 									'--proxy-bypass-list=*',
+									'--user-agent=wp-browser',
 								],
 							],
 						],
