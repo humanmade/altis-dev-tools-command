@@ -270,7 +270,7 @@ EOT
 						'adminPassword' => '%TEST_SITE_ADMIN_PASSWORD%',
 						'adminPath' => '%TEST_SITE_WP_ADMIN_PATH%',
 						'browser' => $run_headless_browser,
-						'host' => $project_subdomain . '_selenium',
+						'host' => '172.17.0.1',
 						'port' => '4444',
 						'window_size' => false, // disabled for Chrome driver.
 						'capabilities' => [
@@ -545,7 +545,7 @@ EOL;
 				'-e COLUMNS=%1%d -e LINES=%2$d ' .
 				'-p 4444:4444 ' .
 				'-p 7900:7900 ' .
-				'--network=%3$s_default ' .
+				'--network=host ' .
 				'--name=%3$s_selenium ' .
 				'--shm-size="2g" ' .
 				'selenium/standalone-%4$s:4.0.0-20211102',
