@@ -291,6 +291,11 @@ EOT
 									'general.useragent.override' => 'wp-browser',
 								],
 							],
+							'EdgeOptions' => [
+								'args' => [
+									'-user-agent=wp-browser',
+								],
+							],
 						],
 					],
 					'WPFilesystem' => [
