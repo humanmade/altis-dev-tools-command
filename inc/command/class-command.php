@@ -391,16 +391,22 @@ EOL;
 		if ( $run_headless_browser ) {
 			// Stop any lingering containers first.
 			$this->stop_browser_container( $input, $output );
-			// Run a new container.
-			$this->run_browser_container( $input, $output );
+
+			// Start a new container.
+			$output->write( '<info>Starting headless browser container..</info>', true, $output::VERBOSITY_NORMAL );
+			$this->start_browser_container( $input, $output );
+
 			// Stop the container on shutdown.
 			register_shutdown_function( function() use ( $input, $output ) {
+				$output->write( '<info>Removing headless browser container..</info>', true, $output::VERBOSITY_NORMAL );
 				$this->stop_browser_container( $input, $output );
 			} );
 		}
 
+		$output->write( '<info>Running CodeCeption..</info>', true, $output::VERBOSITY_NORMAL );
 		$return = $this->run_command( $input, $output, 'vendor/bin/codecept', $options );
 
+		$output->write( '<info>Removing test databases..</info>', true, $output::VERBOSITY_NORMAL );
 		$this->delete_test_db( $input, $output );
 
 		return $return;
@@ -538,7 +544,7 @@ EOL;
 	 *
 	 * @return int
 	 */
-	protected function run_browser_container( InputInterface $input, OutputInterface $output ) {
+	protected function start_browser_container( InputInterface $input, OutputInterface $output ) {
 		$columns = exec( 'tput cols' );
 		$lines = exec( 'tput lines' );
 		$browser = $input->getOption( 'browser' );
@@ -546,19 +552,23 @@ EOL;
 		$available_browsers = [
 			'chrome',
 			'firefox',
-			'edge',
+			// 'edge', // TODO Buggy driver, dig deeper
 		];
 
 		if ( ! in_array( $browser, $available_browsers, true ) ) {
-			return 1;
+			throw new CommandNotFoundException( sprintf(
+				'Browser "%s" is unavailable, available browsers are: %s.',
+				$browser,
+				implode( ', ', $available_browsers ),
+			) );
 		}
 
 		$base_command = sprintf(
 			'docker run ' .
 				'-d ' .
 				'-e COLUMNS=%1%d -e LINES=%2$d ' .
-				'-p 4444:4444 ' .
-				'-p 7900:7900 ' .
+				// '-p 4444:4444 ' .
+				// '-p 7900:7900 ' .
 				'--network=host ' .
 				'--name=%3$s_selenium ' .
 				'--shm-size="2g" ' .
@@ -583,7 +593,7 @@ EOL;
 	 * @return int
 	 */
 	protected function stop_browser_container( InputInterface $input, OutputInterface $output ) {
-		$base_command = sprintf( 'docker rm -f %1$s_selenium', $this->get_project_subdomain() );
+		$base_command = sprintf( 'docker ps -q -a --filter "name=%1$s_selenium" | grep -q . && docker rm -f %1$s_selenium &> /dev/null', $this->get_project_subdomain() );
 
 		passthru( $base_command, $return_var );
 
