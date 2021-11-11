@@ -280,7 +280,7 @@ EOT
 									'--disable-gpu',
 									'--proxy-server=\'direct://\'',
 									'--proxy-bypass-list=*',
-									'--user-agent=wp-browser',
+									'--user-agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36 wp-browser"',
 								],
 							],
 							'moz:firefoxOptions' => [
@@ -288,12 +288,12 @@ EOT
 									'-headless',
 								],
 								'prefs' => [
-									'general.useragent.override' => 'wp-browser',
+									'general.useragent.override' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:70.0) Gecko/20100101 Firefox/70.0 wp-browser',
 								],
 							],
 							'EdgeOptions' => [
 								'args' => [
-									'-user-agent=wp-browser',
+									'-user-agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/604.1 Edg/95.0.100.0 wp-browser"',
 								],
 							],
 						],
@@ -322,7 +322,7 @@ EOT
 						'configFile' => 'altis/dev-tools/inc/codeception/config.php',
 						'contentFolder' => 'content',
 						'bootstrapActions' => [
-							'bootstrapCCWP',
+							'bootstrap_codeception_wp',
 						],
 					],
 				],
