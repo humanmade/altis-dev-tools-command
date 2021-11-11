@@ -5,6 +5,7 @@ namespace Altis\Dev_Tools\Command;
 use Composer\Command\BaseCommand;
 use DOMDocument;
 use Symfony\Component\Console\Exception\CommandNotFoundException;
+use Symfony\Component\Console\Exception\InvalidArgumentException;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -556,7 +557,7 @@ EOL;
 		];
 
 		if ( ! in_array( $browser, $available_browsers, true ) ) {
-			throw new CommandNotFoundException( sprintf(
+			throw new InvalidArgumentException( sprintf(
 				'Browser "%s" is unavailable, available browsers are: %s.',
 				$browser,
 				implode( ', ', $available_browsers ),
