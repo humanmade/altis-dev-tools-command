@@ -563,12 +563,11 @@ EOL;
 			) );
 		}
 
+		// This exports ports 4444 for the Selenium hub web portal, and 7900 for the noVNC server
 		$base_command = sprintf(
 			'docker run ' .
 				'-d ' .
 				'-e COLUMNS=%1%d -e LINES=%2$d ' .
-				// '-p 4444:4444 ' .
-				// '-p 7900:7900 ' .
 				'--network=host ' .
 				'--name=%3$s_selenium ' .
 				'--shm-size="2g" ' .
