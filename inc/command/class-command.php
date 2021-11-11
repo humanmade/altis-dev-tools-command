@@ -215,7 +215,7 @@ EOT
 		$module = $input->getOption( 'module' );
 		$run_headless_browser = $input->getOption( 'browser' );
 		$use_chassis = $input->getOption( 'chassis' );
-		$tests_folder = $module !== 'project' ? "altis/$module/tests" : 'tests';
+		$tests_folder = $module !== 'project' ? "altis/$module/tests" : '../tests';
 		$project_subdomain = $this->get_project_subdomain();
 
 		// Write the default config.
