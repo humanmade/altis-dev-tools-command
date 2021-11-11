@@ -377,7 +377,7 @@ EOL;
 			$test_env
 		);
 
-		// // Check for passed config option.
+		// Check for passed config option.
 		if ( ! preg_match( '/(-c|--configuration)\s+/', implode( ' ', $options ) ) ) {
 			$options = array_merge(
 				[ '-c', 'vendor/codeception.yml' ],
