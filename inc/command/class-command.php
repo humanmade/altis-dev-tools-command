@@ -581,6 +581,9 @@ EOL;
 
 		passthru( $base_command, $return_var );
 
+		// Allow time for selenium app to boot up.
+		sleep( 3 );
+
 		return $return_var;
 	}
 
