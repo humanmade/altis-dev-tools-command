@@ -5,11 +5,13 @@ namespace Altis\Dev_Tools\Command;
 use Composer\Command\BaseCommand;
 use DOMDocument;
 use Symfony\Component\Console\Exception\CommandNotFoundException;
+use Symfony\Component\Console\Exception\InvalidArgumentException;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * Chassis command for Composer.
@@ -22,8 +24,10 @@ class Command extends BaseCommand {
 		$this->setName( 'dev-tools' );
 		$this->setDescription( 'Developer tools' );
 		$this->setDefinition( [
-			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit' ),
+			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit | codecept' ),
 			new InputOption( 'chassis', null, null, 'Run commands in the Local Chassis environment' ),
+			new InputOption( 'module', 'm', InputArgument::OPTIONAL, 'Run commands for a specific module', 'project' ),
+			new InputOption( 'browser', 'b', InputArgument::OPTIONAL, 'Run a headless Chrome browser for acceptance tests, use "chrome", "firefox", or "edge"', '' ),
 			new InputArgument( 'options', InputArgument::IS_ARRAY ),
 		] );
 		$this->setHelp(
@@ -35,6 +39,15 @@ To run PHPUnit integration tests:
                                 use `--` to separate arguments you want to
                                 pass to phpunit. Use the --chassis option
                                 if you are running Local Chassis.
+
+To run Codeception integration tests:
+    codecept [--chassis] -m <module> -b <browser> [--] [options]
+                                use `--` to separate arguments you want to
+                                pass to Codeception. Use the --chassis option
+                                if you are running Local Chassis. Use -m module
+                                to test an Altis module. Use --browser/-b to run
+                                a headless browser container for acceptance tests,
+                                choose 'chrome', 'firefix', or 'edge' as needed.
 EOT
 		);
 	}
@@ -51,6 +64,8 @@ EOT
 		switch ( $subcommand ) {
 			case 'phpunit':
 				return $this->phpunit( $input, $output );
+			case 'codecept':
+				return $this->codecept( $input, $output );
 
 			default:
 				throw new CommandNotFoundException( sprintf( 'Subcommand "%s" is not defined.', $subcommand ) );
@@ -189,13 +204,223 @@ EOT
 	}
 
 	/**
+	 * Runs Codecept with zero config by default.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 * @return int
+	 */
+	protected function codecept( InputInterface $input, OutputInterface $output ) {
+		$options = $input->getArgument( 'options' );
+		$module = $input->getOption( 'module' );
+		$run_headless_browser = $input->getOption( 'browser' );
+		$use_chassis = $input->getOption( 'chassis' );
+		$tests_folder = $module !== 'project' ? "altis/$module/tests" : '../tests';
+		$project_subdomain = $this->get_project_subdomain();
+
+		// Write the default config.
+		$config = [
+			'paths' => [
+				'tests' => $tests_folder,
+				'output' => '../tests/_output',
+				'data' => 'altis/dev-tools/tests/_data',
+				'support' => 'altis/dev-tools/tests/_support',
+			],
+			'actor_suffix' => 'Tester',
+			'extensions' => [
+				'enabled' => [
+					'Codeception\Extension\RunFailed',
+				],
+				'commands' => [
+					'Codeception\Command\GenerateWPUnit',
+					'Codeception\Command\GenerateWPRestApi',
+					'Codeception\Command\GenerateWPRestController',
+					'Codeception\Command\GenerateWPRestPostTypeController',
+					'Codeception\Command\GenerateWPAjax',
+					'Codeception\Command\GenerateWPCanonical',
+					'Codeception\Command\GenerateWPXMLRPC',
+				],
+			],
+			'modules' => [
+				'config' => [
+					'WPDb' => [
+						'dsn' => '%TEST_SITE_DB_DSN%',
+						'user' => '%TEST_SITE_DB_USER%',
+						'password' => '%TEST_SITE_DB_PASSWORD%',
+						'dump' => '%TEST_SITE_DB_DUMP%',
+						'populate' => true,
+						'cleanup' => true,
+						'waitlock' => 10,
+						'url' => '%TEST_SITE_WP_URL%',
+						'urlReplacement' => true,
+						'tablePrefix' => '%TEST_SITE_TABLE_PREFIX%',
+					],
+					'WPBrowser' => [
+						'url' => '%TEST_SITE_WP_URL%',
+						'adminUsername' => '%TEST_SITE_ADMIN_USERNAME%',
+						'adminPassword' => '%TEST_SITE_ADMIN_PASSWORD%',
+						'adminPath' => '%TEST_SITE_WP_ADMIN_PATH%',
+						'headers' => [
+							'X_TEST_REQUEST' => 1,
+							'X_WPBROWSER_REQUEST' => 1,
+						],
+					],
+					'WPWebDriver' => [
+						'url' => '%TEST_SITE_WP_URL%',
+						'adminUsername' => '%TEST_SITE_ADMIN_USERNAME%',
+						'adminPassword' => '%TEST_SITE_ADMIN_PASSWORD%',
+						'adminPath' => '%TEST_SITE_WP_ADMIN_PATH%',
+						'browser' => $run_headless_browser,
+						'host' => '172.17.0.1',
+						'port' => '4444',
+						'window_size' => false, // disabled for Chrome driver.
+						'capabilities' => [
+							'chromeOptions' => [
+								'args' => [
+									'--headless',
+									'--disable-gpu',
+									'--proxy-server=\'direct://\'',
+									'--proxy-bypass-list=*',
+									'--user-agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36 wp-browser"',
+								],
+							],
+							'moz:firefoxOptions' => [
+								'args' => [
+									'-headless',
+								],
+								'prefs' => [
+									'general.useragent.override' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:70.0) Gecko/20100101 Firefox/70.0 wp-browser',
+								],
+							],
+							'EdgeOptions' => [
+								'args' => [
+									'-user-agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/604.1 Edg/95.0.100.0 wp-browser"',
+								],
+							],
+						],
+					],
+					'WPFilesystem' => [
+						'wpRootFolder' => '%WP_ROOT_FOLDER%',
+						'plugins' => '.%WP_CONTENT_FOLDER%/plugins',
+						'mu-plugins' => '%WP_CONTENT_FOLDER%/mu-plugins',
+						'themes' => '%WP_CONTENT_FOLDER%/themes',
+						'uploads' => '%WP_CONTENT_FOLDER%/uploads',
+					],
+					'WPLoader' => [
+						'wpRootFolder' => '%WP_ROOT_FOLDER%',
+						'dbName' => '%TEST_DB_NAME%',
+						'dbHost' => '%TEST_DB_HOST%',
+						'dbUser' => '%TEST_DB_USER%',
+						'dbPassword' => '%TEST_DB_PASSWORD%',
+						'tablePrefix' => '%TEST_TABLE_PREFIX%',
+						'domain' => '%TEST_SITE_WP_DOMAIN%',
+						'adminEmail' => '%TEST_SITE_ADMIN_EMAIL%',
+						'title' => 'Test',
+						'theme' => 'default',
+						'plugins' => [],
+						'activatePlugins' => [],
+						'multisite' => true,
+						'configFile' => 'altis/dev-tools/inc/codeception/config.php',
+						'contentFolder' => 'content',
+						'bootstrapActions' => [
+							'bootstrap_codeception_wp',
+						],
+					],
+				],
+			],
+			'params' => [
+				'codeception.env',
+			],
+		];
+
+		// Merge config from composer.json.
+		$overrides = $this->get_config()['codeception'] ?? [];
+		$config = $this->merge_config( $config, $overrides );
+
+		// Convert to YAML.
+		$yaml = Yaml::dump( $config, 2, 4, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK );
+
+		// Write the file.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
+		file_put_contents(
+			$this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'codeception.yml',
+			$yaml
+		);
+
+		$db_host = $use_chassis ? 'localhost' : 'db';
+		$test_env = <<<EOL
+TEST_SITE_DB_DSN=mysql:host=$db_host;dbname=test
+TEST_SITE_DB_HOST=$db_host
+TEST_SITE_DB_NAME=test
+TEST_SITE_DB_USER=wordpress
+TEST_SITE_DB_PASSWORD=wordpress
+TEST_SITE_DB_DUMP=altis/dev-tools/tests/_data/dump.sql
+TEST_SITE_TABLE_PREFIX=wp_
+TEST_SITE_ADMIN_USERNAME=admin
+TEST_SITE_ADMIN_PASSWORD=password
+TEST_SITE_WP_ADMIN_PATH=/wp-admin
+TEST_SITE_WP_URL=https://$project_subdomain.altis.dev
+TEST_SITE_WP_DOMAIN=$project_subdomain.altis.dev
+TEST_SITE_ADMIN_EMAIL=admin@example.org
+WP_ROOT_FOLDER=wordpress
+WP_CONTENT_FOLDER=../content
+TEST_DB_NAME=test2
+TEST_DB_HOST=$db_host
+TEST_DB_USER=wordpress
+TEST_DB_PASSWORD=wordpress
+TEST_TABLE_PREFIX=wp_
+EOL;
+
+		// Write the env file.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
+		file_put_contents(
+			$this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'codeception.env',
+			$test_env
+		);
+
+		// Check for passed config option.
+		if ( ! preg_match( '/(-c|--configuration)\s+/', implode( ' ', $options ) ) ) {
+			$options = array_merge(
+				[ '-c', 'vendor/codeception.yml' ],
+				$options
+			);
+		}
+
+		$this->create_test_db( $input, $output );
+
+		// Run the headless browser container if needed.
+		if ( $run_headless_browser ) {
+			// Stop any lingering containers first.
+			$this->stop_browser_container( $input, $output );
+
+			// Start a new container.
+			$output->write( '<info>Starting headless browser container..</info>', true, $output::VERBOSITY_NORMAL );
+			$this->start_browser_container( $input, $output );
+
+			// Stop the container on shutdown.
+			register_shutdown_function( function() use ( $input, $output ) {
+				$output->write( '<info>Removing headless browser container..</info>', true, $output::VERBOSITY_NORMAL );
+				$this->stop_browser_container( $input, $output );
+			} );
+		}
+
+		$output->write( '<info>Running CodeCeption..</info>', true, $output::VERBOSITY_NORMAL );
+		$return = $this->run_command( $input, $output, 'vendor/bin/codecept', $options );
+
+		$output->write( '<info>Removing test databases..</info>', true, $output::VERBOSITY_NORMAL );
+		$this->delete_test_db( $input, $output );
+
+		return $return;
+	}
+
+	/**
 	 * Run the passed command on either the local-server or local-chassis environment.
 	 *
 	 * @param InputInterface $input
 	 * @param OutputInterface $output
 	 * @param string $command The command to run.
 	 * @param array $options Any required options to pass to the command.
-	 * @return void
+	 * @return int
 	 */
 	protected function run_command( InputInterface $input, OutputInterface $output, string $command, array $options = [] ) {
 		$use_chassis = $input->getOption( 'chassis' );
@@ -213,6 +438,169 @@ EOT
 		] ), $output );
 
 		return $return_val;
+	}
+
+	/**
+	 * Create test databases.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function create_test_db( InputInterface $input, OutputInterface $output ) {
+		$use_chassis = $input->getOption( 'chassis' );
+
+		if ( $use_chassis ) {
+			$cli = $this->getApplication()->find( 'chassis' );
+
+			$return_val = $cli->run( new ArrayInput( [
+				'subcommand' => 'exec',
+				'options' => [
+					'mysql',
+					'-uroot',
+					'-ppassword',
+					'-e',
+					'"CREATE DATABASE IF NOT EXISTS test; CREATE DATABASE IF NOT EXISTS test2; GRANT ALL PRIVILEGES ON test.* TO wordpress@localhost IDENTIFIED BY \"wordpress\"; GRANT ALL PRIVILEGES ON test2.* TO wordpress@localhost IDENTIFIED BY \"wordpress\";"',
+				],
+			] ), $output );
+		} else {
+			$cli = $this->getApplication()->find( 'local-server' );
+
+			$return_val = $cli->run( new ArrayInput( [
+				'subcommand' => 'db',
+				'options' => [
+					'exec',
+					'CREATE DATABASE IF NOT EXISTS test; CREATE DATABASE IF NOT EXISTS test2; GRANT ALL PRIVILEGES ON test.* TO wordpress IDENTIFIED BY \"wordpress\"; GRANT ALL PRIVILEGES ON test2.* TO wordpress IDENTIFIED BY \"wordpress\";',
+				],
+			] ), $output );
+		}
+
+		return $return_val;
+	}
+
+	/**
+	 * Create test databases.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function delete_test_db( InputInterface $input, OutputInterface $output ) {
+		$use_chassis = $input->getOption( 'chassis' );
+
+		if ( $use_chassis ) {
+			$cli = $this->getApplication()->find( 'chassis' );
+
+			$return_val = $cli->run( new ArrayInput( [
+				'subcommand' => 'exec',
+				'options' => [
+					'mysql',
+					'-uroot',
+					'-ppassword',
+					'-e',
+					'"DROP DATABASE test; DROP DATABASE test2; REVOKE ALL PRIVILEGES on test.* FROM wordpress; REVOKE ALL PRIVILEGES on test2.* FROM wordpress;"',
+				],
+			] ), $output );
+		} else {
+			$cli = $this->getApplication()->find( 'local-server' );
+
+			$return_val = $cli->run( new ArrayInput( [
+				'subcommand' => 'db',
+				'options' => [
+					'exec',
+					'DROP DATABASE test; DROP DATABASE test2; REVOKE ALL PRIVILEGES on test.* FROM wordpress; REVOKE ALL PRIVILEGES on test2.* FROM wordpress;',
+				],
+			] ), $output );
+		}
+
+		return $return_val;
+	}
+
+	/**
+	 * Get the name of the project for the local subdomain
+	 *
+	 * @return string
+	 */
+	protected function get_project_subdomain() : string {
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+		$composer_json = json_decode( file_get_contents( getcwd() . '/composer.json' ), true );
+
+		if ( isset( $composer_json['extra']['altis']['modules']['local-server']['name'] ) ) {
+			$project_name = $composer_json['extra']['altis']['modules']['local-server']['name'];
+		} else {
+			$project_name = basename( getcwd() );
+		}
+
+		return preg_replace( '/[^A-Za-z0-9\-\_]/', '', $project_name );
+	}
+
+	/**
+	 * Start a headless browser container for WebDriver used in acceptance tests.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function start_browser_container( InputInterface $input, OutputInterface $output ) {
+		$columns = exec( 'tput cols' );
+		$lines = exec( 'tput lines' );
+		$browser = $input->getOption( 'browser' );
+
+		$available_browsers = [
+			'chrome',
+			'firefox',
+			// 'edge', // TODO Buggy driver, dig deeper
+		];
+
+		if ( ! in_array( $browser, $available_browsers, true ) ) {
+			throw new InvalidArgumentException( sprintf(
+				'Browser "%s" is unavailable, available browsers are: %s.',
+				$browser,
+				implode( ', ', $available_browsers ),
+			) );
+		}
+
+		// This exports ports 4444 for the Selenium hub web portal, and 7900 for the noVNC server
+		$base_command = sprintf(
+			'docker run ' .
+				'-d ' .
+				'-e COLUMNS=%1%d -e LINES=%2$d ' .
+				'--network=host ' .
+				'--name=%3$s_selenium ' .
+				'--shm-size="2g" ' .
+				'selenium/standalone-%4$s:4.0.0-20211102',
+			$columns,
+			$lines,
+			$this->get_project_subdomain(),
+			$browser,
+		);
+
+		passthru( $base_command, $return_var );
+
+		// Allow time for selenium app to boot up.
+		sleep( 3 );
+
+		return $return_var;
+	}
+
+	/**
+	 * Stop the headless browser container.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function stop_browser_container( InputInterface $input, OutputInterface $output ) {
+		$base_command = sprintf( 'docker ps -q -a --filter "name=%1$s_selenium" | grep -q . && docker rm -f %1$s_selenium &> /dev/null', $this->get_project_subdomain() );
+
+		passthru( $base_command, $return_var );
+
+		return $return_var;
 	}
 
 	/**
@@ -256,6 +644,36 @@ EOT
 			return in_array( pathinfo( $full_path, PATHINFO_EXTENSION ), [ 'php', 'inc' ], true );
 		}
 		return is_dir( $full_path );
+	}
+
+	/**
+	 * Merges two configuration arrays together, overriding the first or adding
+	 * to it with items from the second.
+	 *
+	 * @param array $config The default config array.
+	 * @param array $overrides The config to merge in.
+	 * @return array
+	 */
+	protected function merge_config( array $config, array $overrides ) : array {
+		$merged = $config;
+		foreach ( $overrides as $key => $value ) {
+			if ( is_string( $key ) ) {
+				if ( is_array( $value ) ) {
+					// Recursively merge arrays.
+					$merged[ $key ] = $this->merge_config( $merged[ $key ] ?? [], $value );
+				} else {
+					// Overwrite scalar values directly.
+					$merged[ $key ] = $value;
+				}
+			} else {
+				// Merge numerically keyed arrays directly and remove empty/duplicate items.
+				$merged = array_merge( $merged, (array) $overrides );
+				$merged = array_filter( $merged );
+				$merged = array_unique( $merged );
+				break;
+			}
+		}
+		return $merged;
 	}
 
 }
