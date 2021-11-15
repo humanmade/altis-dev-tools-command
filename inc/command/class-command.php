@@ -222,7 +222,7 @@ EOT
 		$config = [
 			'paths' => [
 				'tests' => $tests_folder,
-				'output' => 'altis/dev-tools/tests/_output',
+				'output' => '../tests/_output',
 				'data' => 'altis/dev-tools/tests/_data',
 				'support' => 'altis/dev-tools/tests/_support',
 			],
