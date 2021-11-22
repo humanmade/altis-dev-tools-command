@@ -248,12 +248,21 @@ EOT
 						'user' => '%TEST_SITE_DB_USER%',
 						'password' => '%TEST_SITE_DB_PASSWORD%',
 						'dump' => '%TEST_SITE_DB_DUMP%',
+						'populator' => sprintf(
+							'export DB_NAME=%1$s && wp db import %2$s && wp search-replace %3$s %4$s --network --url=%3$s',
+							'%TEST_SITE_DB_NAME%',
+							'vendor/%TEST_SITE_DB_DUMP%',
+							'dev.altis.dev',
+							'%TEST_SITE_WP_DOMAIN%',
+						),
 						'populate' => true,
-						'cleanup' => true,
+						'cleanup' => false,
 						'waitlock' => 10,
 						'url' => '%TEST_SITE_WP_URL%',
-						'urlReplacement' => true,
+						'urlReplacement' => false,
 						'tablePrefix' => '%TEST_SITE_TABLE_PREFIX%',
+						'letAdminEmailVerification' => true,
+						'letCron' => true,
 					],
 					'WPBrowser' => [
 						'url' => '%TEST_SITE_WP_URL%',
@@ -387,6 +396,9 @@ EOL;
 		}
 
 		$this->create_test_db( $input, $output );
+
+		// Ensure cache is clean.
+		$this->run_command( $input, $output, 'wp', [ 'cache', 'flush' ] );
 
 		// Run the headless browser container if needed.
 		if ( $run_headless_browser ) {
