@@ -282,6 +282,7 @@ EOT
 						'browser' => $run_headless_browser,
 						'host' => '172.17.0.1',
 						'port' => '4444',
+						'wait' => 20,
 						'window_size' => false, // disabled for Chrome driver.
 						'capabilities' => [
 							'chromeOptions' => [
