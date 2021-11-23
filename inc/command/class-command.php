@@ -26,7 +26,7 @@ class Command extends BaseCommand {
 		$this->setDefinition( [
 			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit | codecept' ),
 			new InputOption( 'chassis', null, null, 'Run commands in the Local Chassis environment' ),
-			new InputOption( 'module', 'm', InputArgument::OPTIONAL, 'Run commands for a specific module', 'project' ),
+			new InputOption( 'path', 'p', InputArgument::OPTIONAL, 'Use a custom path for tests folder.', '../tests' ),
 			new InputOption( 'browser', 'b', InputArgument::OPTIONAL, 'Run a headless Chrome browser for acceptance tests, use "chrome", "firefox", or "edge"', '' ),
 			new InputArgument( 'options', InputArgument::IS_ARRAY ),
 		] );
@@ -41,12 +41,12 @@ To run PHPUnit integration tests:
                                 if you are running Local Chassis.
 
 To run Codeception integration tests:
-    codecept [--chassis] -m <module> -b <browser> [--] [options]
+    codecept [--chassis] -p <path> -b <browser> [--] [options]
                                 use `--` to separate arguments you want to
                                 pass to Codeception. Use the --chassis option
-                                if you are running Local Chassis. Use -m module
-                                to test an Altis module. Use --browser/-b to run
-                                a headless browser container for acceptance tests,
+                                if you are running Local Chassis. Use -p path
+                                to specify custom tests folder. Use --browser/-b
+								to run a headless browser container for acceptance tests,
                                 choose 'chrome', 'firefix', or 'edge' as needed.
 EOT
 		);
@@ -212,19 +212,33 @@ EOT
 	 */
 	protected function codecept( InputInterface $input, OutputInterface $output ) {
 		$options = $input->getArgument( 'options' );
-		$module = $input->getOption( 'module' );
+		$tests_folder = $input->getOption( 'path' );
 		$run_headless_browser = $input->getOption( 'browser' );
 		$use_chassis = $input->getOption( 'chassis' );
-		$tests_folder = $module !== 'project' ? "altis/$module/tests" : '../tests';
 		$project_subdomain = $this->get_project_subdomain();
+
+		$folders = [
+			'_data' => '',
+			'_support' => '',
+			'_envs' => '',
+		];
+
+		foreach ( $folders as $folder => $_ ) {
+			if ( file_exists( $tests_folder . '/' . $folder ) ) {
+				$folders[ $folder ] = $tests_folder . '/' . $folder;
+			} else {
+				$folders[ $folder ] = 'altis/dev-tools/tests/' . $folder;
+			}
+		}
 
 		// Write the default config.
 		$config = [
 			'paths' => [
 				'tests' => $tests_folder,
 				'output' => '../tests/_output',
-				'data' => 'altis/dev-tools/tests/_data',
-				'support' => 'altis/dev-tools/tests/_support',
+				'data' => $folders['_data'],
+				'support' => $folders['_support'],
+				'envs' => $folders['_envs'],
 			],
 			'actor_suffix' => 'Tester',
 			'extensions' => [
