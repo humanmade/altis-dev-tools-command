@@ -46,8 +46,8 @@ To run Codeception integration tests:
                                 pass to Codeception. Use the --chassis option
                                 if you are running Local Chassis. Use -p path
                                 to specify custom tests folder. Use --browser/-b
-								to run a headless browser container for acceptance tests,
-                                choose 'chrome', 'firefix', or 'edge' as needed.
+                                to run a headless browser container for acceptance tests,
+                                choose 'chrome', or 'firefox' as needed.
 EOT
 		);
 	}
