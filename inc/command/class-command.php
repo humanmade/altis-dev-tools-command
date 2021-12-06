@@ -249,10 +249,12 @@ EOT
 						'password' => '%TEST_SITE_DB_PASSWORD%',
 						'dump' => '%TEST_SITE_DB_DUMP%',
 						'populator' => sprintf(
-							'export DB_NAME=%1$s && wp db import %2$s && wp search-replace %3$s %4$s --network --url=%3$s',
+							'export DB_NAME=%1$s && ' .
+								'wp core multisite-install --quiet --url=%2$s --base=/ --title=Testing ' .
+								'--admin_user=admin --admin_password=password --admin_email=admin@%3$s ' .
+								'--skip-email --skip-config && wp altis migrate --url=%2$s',
 							'%TEST_SITE_DB_NAME%',
-							'vendor/%TEST_SITE_DB_DUMP%',
-							'dev.altis.dev',
+							'%TEST_SITE_WP_URL%',
 							'%TEST_SITE_WP_DOMAIN%',
 						),
 						'populate' => true,
