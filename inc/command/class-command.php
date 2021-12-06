@@ -223,7 +223,7 @@ EOT
 			'_data' => 'altis/dev-tools/tests/_data',
 			'_support' => 'altis/dev-tools/tests/_support',
 			'_envs' => 'altis/dev-tools/tests/_env',
-			'_output' => 'altis/dev-tools/tests/_output',
+			'_output' => "{$tests_folder}/_output",
 		];
 
 		foreach ( $folders as $folder => $_ ) {
