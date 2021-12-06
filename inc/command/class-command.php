@@ -27,6 +27,7 @@ class Command extends BaseCommand {
 			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit | codecept' ),
 			new InputOption( 'chassis', null, null, 'Run commands in the Local Chassis environment' ),
 			new InputOption( 'path', 'p', InputArgument::OPTIONAL, 'Use a custom path for tests folder.', '../tests' ),
+			new InputOption( 'output', 'o', InputArgument::OPTIONAL, 'Use a custom path for output folder.', '' ),
 			new InputOption( 'browser', 'b', InputArgument::OPTIONAL, 'Run a headless Chrome browser for acceptance tests, use "chrome", "firefox", or "edge"', '' ),
 			new InputArgument( 'options', InputArgument::IS_ARRAY ),
 		] );
@@ -41,7 +42,7 @@ To run PHPUnit integration tests:
                                 if you are running Local Chassis.
 
 To run Codeception integration tests:
-    codecept [--chassis] -p <path> -b <browser> [--] [options]
+    codecept [--chassis] -p <path> -b <browser> -o <output-folder> [--] [options]
                                 use `--` to separate arguments you want to
                                 pass to Codeception. Use the --chassis option
                                 if you are running Local Chassis. Use -p path
@@ -213,29 +214,34 @@ EOT
 	protected function codecept( InputInterface $input, OutputInterface $output ) {
 		$options = $input->getArgument( 'options' );
 		$tests_folder = $input->getOption( 'path' );
+		$output_folder = $input->getOption( 'output' );
 		$run_headless_browser = $input->getOption( 'browser' );
 		$use_chassis = $input->getOption( 'chassis' );
 		$project_subdomain = $this->get_project_subdomain();
 
 		$folders = [
-			'_data' => '',
-			'_support' => '',
-			'_envs' => '',
+			'_data' => 'altis/dev-tools/tests/_data',
+			'_support' => 'altis/dev-tools/tests/_support',
+			'_envs' => 'altis/dev-tools/tests/_env',
+			'_output' => 'altis/dev-tools/tests/_output',
 		];
 
 		foreach ( $folders as $folder => $_ ) {
 			if ( file_exists( $tests_folder . '/' . $folder ) ) {
 				$folders[ $folder ] = $tests_folder . '/' . $folder;
-			} else {
-				$folders[ $folder ] = 'altis/dev-tools/tests/' . $folder;
 			}
+		}
+
+		// Allow custom output folder.
+		if ( $output_folder ) {
+			$folders['_output'] = $output_folder;
 		}
 
 		// Write the default config.
 		$config = [
 			'paths' => [
 				'tests' => $tests_folder,
-				'output' => '../tests/_output',
+				'output' => $folders['_output'],
 				'data' => $folders['_data'],
 				'support' => $folders['_support'],
 				'envs' => $folders['_envs'],
