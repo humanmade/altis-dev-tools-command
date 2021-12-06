@@ -264,6 +264,10 @@ EOT
 						'letAdminEmailVerification' => true,
 						'letCron' => true,
 					],
+					'WPCLI' => [
+						'path' => '/usr/src/app',
+						'require' => '/usr/src/app/index.php',
+					],
 					'WPBrowser' => [
 						'url' => '%TEST_SITE_WP_URL%',
 						'adminUsername' => '%TEST_SITE_ADMIN_USERNAME%',
