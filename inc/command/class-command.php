@@ -26,7 +26,7 @@ class Command extends BaseCommand {
 		$this->setDefinition( [
 			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit | codecept' ),
 			new InputOption( 'chassis', null, null, 'Run commands in the Local Chassis environment' ),
-			new InputOption( 'path', 'p', InputArgument::OPTIONAL, 'Use a custom path for tests folder.', '../tests' ),
+			new InputOption( 'path', 'p', InputArgument::OPTIONAL, 'Use a custom path for tests folder.', 'tests' ),
 			new InputOption( 'output', 'o', InputArgument::OPTIONAL, 'Use a custom path for output folder.', '' ),
 			new InputOption( 'browser', 'b', InputArgument::OPTIONAL, 'Run a headless Chrome browser for acceptance tests, use "chrome", "firefox", or "edge"', '' ),
 			new InputArgument( 'options', InputArgument::IS_ARRAY ),
@@ -213,11 +213,13 @@ EOT
 	 */
 	protected function codecept( InputInterface $input, OutputInterface $output ) {
 		$options = $input->getArgument( 'options' );
-		$tests_folder = $input->getOption( 'path' );
+		// Codeception command runs within `vendor` directory, so paths are relative to that.
+		$tests_folder = '../' . $input->getOption( 'path' );
 		$output_folder = $input->getOption( 'output' );
-		$run_headless_browser = $input->getOption( 'browser' );
+		$run_headless_browser = $input->getOption( 'browser' ) ?: 'chrome';
 		$use_chassis = $input->getOption( 'chassis' );
 		$project_subdomain = $this->get_project_subdomain();
+		$test_suite = $this->get_test_suite_argument( $input );
 
 		$folders = [
 			'_data' => 'altis/dev-tools/tests/_data',
@@ -422,40 +424,63 @@ EOL;
 			);
 		}
 
-		$this->create_test_db( $input, $output );
+		if ( $test_suite ) {
+			$suites = [ $test_suite ];
+		} else {
+			// Codeception command runs within `vendor` directory, so paths are relative to that.
+			$suites = $this->get_test_suites( 'vendor/' . $tests_folder );
+			$output->write(
+				sprintf( '<info>Detected %d suites, (%s)..</info>', count( $suites ), implode( ', ', $suites ) ),
+				true,
+				$output::VERBOSITY_NORMAL
+			);
+		}
 
-		// Ensure cache is clean.
-		$this->run_command( $input, $output, 'wp', [ 'cache', 'flush' ] );
+		$return = '';
 
 		// Write temp file during test run.
 		$temp_run_file_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . '.test-running';
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
 		file_put_contents( $temp_run_file_path, 'true' );
 
-		// Run the headless browser container if needed.
-		if ( $run_headless_browser ) {
-			// Stop any lingering containers first.
-			$this->stop_browser_container( $input, $output );
+		// Iterate over the suites.
+		foreach ( $suites as $suite ) {
+			$output->write( sprintf( '<info>Running "%s" test suite..</info>', $suite ), true, $output::VERBOSITY_NORMAL );
 
-			// Start a new container.
-			$output->write( '<info>Starting headless browser container..</info>', true, $output::VERBOSITY_NORMAL );
-			$this->start_browser_container( $input, $output );
+			// Ensure cache is clean.
+			$this->run_command( $input, $output, 'wp', [ 'cache', 'flush', '--quiet' ] );
 
-			// Stop the container on shutdown.
-			register_shutdown_function( function() use ( $input, $output ) {
-				$output->write( '<info>Removing headless browser container..</info>', true, $output::VERBOSITY_NORMAL );
-				$this->stop_browser_container( $input, $output );
-			} );
+			// Create database if needed.
+			if ( $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPDb' ) ) {
+				$this->create_test_db( $input, $output );
+
+				register_shutdown_function( function() use ( $input, $output, $temp_run_file_path ) {
+					$output->write( '<info>Removing test databases..</info>', true, $output::VERBOSITY_NORMAL );
+					$this->delete_test_db( $input, $output );
+					unlink( $temp_run_file_path );
+				} );
+			}
+
+			// Run the headless browser container if needed.
+			if ( $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPWebDriver' ) ) {
+				// Start a new container.
+				$this->start_browser_container( $input, $output );
+
+				// Stop the container on shutdown.
+				register_shutdown_function( function() use ( $input, $output ) {
+					$output->write( '<info>Removing headless browser container..</info>', true, $output::VERBOSITY_NORMAL );
+					$this->stop_browser_container( $input, $output );
+				} );
+			}
+
+			// Add the suite name to options here, if not passed already, and we have more than one.
+			if ( empty( $test_suite ) ) {
+				$options = $this->add_suite_name_to_options( $options, $suite );
+			}
+
+			$output->write( '<info>Running CodeCeption..</info>', true, $output::VERBOSITY_NORMAL );
+			$return = $this->run_command( $input, $output, 'vendor/bin/codecept', $options );
 		}
-
-		register_shutdown_function( function() use ( $input, $output, $temp_run_file_path ) {
-			$output->write( '<info>Removing test databases..</info>', true, $output::VERBOSITY_NORMAL );
-			$this->delete_test_db( $input, $output );
-			unlink( $temp_run_file_path );
-		} );
-
-		$output->write( '<info>Running CodeCeption..</info>', true, $output::VERBOSITY_NORMAL );
-		$return = $this->run_command( $input, $output, 'vendor/bin/codecept', $options );
 
 		return $return;
 	}
@@ -518,7 +543,7 @@ EOL;
 				'subcommand' => 'db',
 				'options' => [
 					'exec',
-					'CREATE DATABASE IF NOT EXISTS test; CREATE DATABASE IF NOT EXISTS test2; GRANT ALL PRIVILEGES ON test.* TO wordpress IDENTIFIED BY \"wordpress\"; GRANT ALL PRIVILEGES ON test2.* TO wordpress IDENTIFIED BY \"wordpress\";',
+					'DROP DATABASE IF EXISTS test; DROP DATABASE IF EXISTS test2; CREATE DATABASE test; CREATE DATABASE test2; GRANT ALL PRIVILEGES ON test.* TO wordpress IDENTIFIED BY \"wordpress\"; GRANT ALL PRIVILEGES ON test2.* TO wordpress IDENTIFIED BY \"wordpress\";',
 				],
 			] ), $output );
 		}
@@ -608,7 +633,8 @@ EOL;
 	protected function start_browser_container( InputInterface $input, OutputInterface $output ) {
 		$columns = exec( 'tput cols' );
 		$lines = exec( 'tput lines' );
-		$browser = $input->getOption( 'browser' );
+		$browser = $input->getOption( 'browser' ) ?: 'chrome';
+		$output->write( sprintf( '<info>Starting headless "%s" browser container..</info>', $browser ), true, $output::VERBOSITY_NORMAL );
 
 		$available_browsers = [
 			'chrome',
@@ -623,6 +649,9 @@ EOL;
 				implode( ', ', $available_browsers ),
 			) );
 		}
+
+		// Stop any lingering containers first.
+		$this->stop_browser_container( $input, $output );
 
 		// This exports ports 4444 for the Selenium hub web portal, and 7900 for the noVNC server.
 		$base_command = sprintf(
@@ -661,6 +690,69 @@ EOL;
 		passthru( $base_command, $return_var );
 
 		return $return_var;
+	}
+
+	/**
+	 * Return suite files within a tests folder.
+	 *
+	 * @param string $folder Tests folder to scan.
+	 * @return array
+	 */
+	protected function get_test_suites( $folder ) : array {
+		$suites = glob( $folder . '/*.suite.yml' );
+		foreach ( $suites as $i => $suite ) {
+			$suites[ $i ] = substr( $suite, strlen( $folder ) + 1, strpos( $suite, '.suite.yml' ) - strlen( $suite ) );
+		}
+
+		return $suites;
+	}
+
+	/**
+	 * Returns whether a suite configuration requires a specific module.
+	 *
+	 * @param string $suite_file Suite YML file.
+	 * @param string $module Module name.
+	 *
+	 * @return boolean
+	 */
+	protected function suite_has_module( string $suite_file, string $module ) : bool {
+		$suite_config = file_get_contents( $suite_file );
+		$needs_web_driver = preg_match( "#- {$module}#", $suite_config );
+
+		return $needs_web_driver;
+	}
+
+	/**
+	 * Return the test suite selected from CLI arguments.
+	 *
+	 * @param InputInterface $input
+	 *
+	 * @return string
+	 */
+	protected function get_test_suite_argument( InputInterface $input ) : string {
+		$arguments = $input->getArguments();
+		$first_argument = $arguments['options'][1] ?? '';
+
+		// Test suite should be the first argumet so we can check for it, otherwise, assume no suite is selected.
+		if ( 0 === strpos( $first_argument, '-' ) ) {
+			return '';
+		}
+
+		return $first_argument;
+	}
+
+	/**
+	 * Add suite name to options passed to codecept command.
+	 *
+	 * @param array $options Options array.
+	 * @param string $suite_name Suite name.
+	 *
+	 * @return array
+	 */
+	protected function add_suite_name_to_options( array $options, string $suite_name ) : array {
+		$index = array_search( 'run', $options );
+		array_splice( $options, $index + 1, 0, [ $suite_name ] );
+		return $options;
 	}
 
 	/**
