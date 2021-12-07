@@ -4,6 +4,7 @@ namespace Altis\Dev_Tools\Command;
 
 use Composer\Command\BaseCommand;
 use DOMDocument;
+use Exception;
 use Symfony\Component\Console\Exception\CommandNotFoundException;
 use Symfony\Component\Console\Exception\InvalidArgumentException;
 use Symfony\Component\Console\Input\ArrayInput;
@@ -219,7 +220,12 @@ EOT
 		$run_headless_browser = $input->getOption( 'browser' ) ?: 'chrome';
 		$use_chassis = $input->getOption( 'chassis' );
 		$project_subdomain = $this->get_project_subdomain();
+		$subsubcommand = $input->getArguments()['options'][0] ?? '';
 		$test_suite = $this->get_test_suite_argument( $input );
+
+		if ( $subsubcommand === 'bootstrap' ) {
+			return $this->bootstrap_codecept( $input->getOption( 'path' ) ?: 'tests', $input, $output );
+		}
 
 		$folders = [
 			'_data' => 'altis/dev-tools/tests/_data',
@@ -510,6 +516,58 @@ EOL;
 		] ), $output );
 
 		return $return_val;
+	}
+
+	/**
+	 * Bootstrap tests folder.
+	 *
+	 * @param string $tests_folder Target folder to boostrap the tests into.
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return void
+	 */
+	protected function bootstrap_codecept( string $tests_folder, InputInterface $input, OutputInterface $output ) {
+		$default_suites = $this->get_test_suites( 'vendor/altis/dev-tools/tests' );
+
+		$suites = $input->getArguments()['options'][1] ?? '';
+		if ( 0 === strpos( $suites, '-' ) ) {
+			$suites = $default_suites;
+		} else {
+			$suites = explode( ',', $suites );
+			$invalid = array_diff( $suites, $default_suites );
+			if ( count( $invalid ) ) {
+				throw new Exception(
+					sprintf(
+						'Invalid suites selected: "%s", available suites are: "%s".',
+						implode( ',', $invalid ),
+						implode( ',', $default_suites )
+					)
+				);
+			}
+		}
+
+		$base_path = getcwd(); // Do we have another way to detect this ?
+		$tests_folder = $base_path . '/' . $tests_folder;
+
+		if ( ! file_exists( $tests_folder ) ) {
+			mkdir( $tests_folder );
+		} else {
+			foreach ( $suites as $suite ) {
+				if ( file_exists( $tests_folder . '/' . $suite ) ) {
+					throw new Exception( sprintf( 'An existing "%s" suite was found, halting execution.', $suite ) );
+				}
+			}
+		}
+
+		$template_path = 'vendor/altis/dev-tools/tests/%s.suite.yml';
+		foreach ( $suites as $suite ) {
+			$suite_path = sprintf( '%s/%s.suite.yml', $tests_folder, $suite );
+			copy( sprintf( $template_path, $suite ), $suite_path );
+			mkdir( $tests_folder . '/' . $suite );
+		}
+
+		$output->write( sprintf( '<info>Created test suites (%s) in %s.</info>', implode( ',', $suites ), $tests_folder ) );
 	}
 
 	/**
