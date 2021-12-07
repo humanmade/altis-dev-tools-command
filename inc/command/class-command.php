@@ -29,7 +29,7 @@ class Command extends BaseCommand {
 			new InputOption( 'chassis', null, null, 'Run commands in the Local Chassis environment' ),
 			new InputOption( 'path', 'p', InputArgument::OPTIONAL, 'Use a custom path for tests folder.', 'tests' ),
 			new InputOption( 'output', 'o', InputArgument::OPTIONAL, 'Use a custom path for output folder.', '' ),
-			new InputOption( 'browser', 'b', InputArgument::OPTIONAL, 'Run a headless Chrome browser for acceptance tests, use "chrome", "firefox", or "edge"', '' ),
+			new InputOption( 'browser', 'b', InputArgument::OPTIONAL, 'Run a headless Chrome browser for acceptance tests, use "chrome", "firefox", or "edge"', 'chrome' ),
 			new InputArgument( 'options', InputArgument::IS_ARRAY ),
 		] );
 		$this->setHelp(
@@ -214,18 +214,20 @@ EOT
 	 */
 	protected function codecept( InputInterface $input, OutputInterface $output ) {
 		$options = $input->getArgument( 'options' );
-		// Codeception command runs within `vendor` directory, so paths are relative to that.
-		$tests_folder = '../' . $input->getOption( 'path' );
+		$tests_folder = untrailingslashit( $input->getOption( 'path' ) );
 		$output_folder = $input->getOption( 'output' );
-		$run_headless_browser = $input->getOption( 'browser' ) ?: 'chrome';
+		$run_headless_browser = $input->getOption( 'browser' );
 		$use_chassis = $input->getOption( 'chassis' );
 		$project_subdomain = $this->get_project_subdomain();
 		$subsubcommand = $input->getArguments()['options'][0] ?? '';
 		$test_suite = $this->get_test_suite_argument( $input );
 
 		if ( $subsubcommand === 'bootstrap' ) {
-			return $this->bootstrap_codecept( $input->getOption( 'path' ) ?: 'tests', $input, $output );
+			return $this->bootstrap_codecept( $tests_folder, $input, $output );
 		}
+
+		// Working directory for codeception is `vendor`, so need to go up once to resolve relative paths correctly.
+		$tests_folder = '../' . $tests_folder;
 
 		$folders = [
 			'_data' => 'altis/dev-tools/tests/_data',
