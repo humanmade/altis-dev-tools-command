@@ -427,6 +427,11 @@ EOL;
 		// Ensure cache is clean.
 		$this->run_command( $input, $output, 'wp', [ 'cache', 'flush' ] );
 
+		// Write temp file during test run.
+		$temp_run_file_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . '.test-running';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
+		file_put_contents( $temp_run_file_path, 'true' );
+
 		// Run the headless browser container if needed.
 		if ( $run_headless_browser ) {
 			// Stop any lingering containers first.
@@ -443,11 +448,14 @@ EOL;
 			} );
 		}
 
+		register_shutdown_function( function() use ( $input, $output, $temp_run_file_path ) {
+			$output->write( '<info>Removing test databases..</info>', true, $output::VERBOSITY_NORMAL );
+			$this->delete_test_db( $input, $output );
+			unlink( $temp_run_file_path );
+		} );
+
 		$output->write( '<info>Running CodeCeption..</info>', true, $output::VERBOSITY_NORMAL );
 		$return = $this->run_command( $input, $output, 'vendor/bin/codecept', $options );
-
-		$output->write( '<info>Removing test databases..</info>', true, $output::VERBOSITY_NORMAL );
-		$this->delete_test_db( $input, $output );
 
 		return $return;
 	}
@@ -554,6 +562,19 @@ EOL;
 			] ), $output );
 		}
 
+		// Remove ES indexes.
+		$return_val = $cli->run( new ArrayInput( [
+			'subcommand' => 'exec',
+			'options' => [
+				'curl',
+				'--silent',
+				'-o',
+				'/dev/null',
+				'-XDELETE',
+				'http://elasticsearch:9200/ep-tests-*',
+			],
+		] ), $output );
+
 		return $return_val;
 	}
 
@@ -592,7 +613,7 @@ EOL;
 		$available_browsers = [
 			'chrome',
 			'firefox',
-			// 'edge', // TODO Buggy driver, dig deeper
+			// 'edge', // TODO Buggy driver, dig deeper.
 		];
 
 		if ( ! in_array( $browser, $available_browsers, true ) ) {
@@ -603,7 +624,7 @@ EOL;
 			) );
 		}
 
-		// This exports ports 4444 for the Selenium hub web portal, and 7900 for the noVNC server
+		// This exports ports 4444 for the Selenium hub web portal, and 7900 for the noVNC server.
 		$base_command = sprintf(
 			'docker run ' .
 				'-d ' .
@@ -621,7 +642,7 @@ EOL;
 		passthru( $base_command, $return_var );
 
 		// Allow time for selenium app to boot up.
-		sleep( 3 );
+		sleep( 5 );
 
 		return $return_var;
 	}
