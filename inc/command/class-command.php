@@ -551,7 +551,7 @@ EOL;
 		$tests_folder = $base_path . '/' . $tests_folder;
 
 		if ( ! file_exists( $tests_folder ) ) {
-			mkdir( $tests_folder );
+			mkdir( $tests_folder, 0755, true );
 		} else {
 			foreach ( $suites as $suite ) {
 				if ( file_exists( $tests_folder . '/' . $suite ) ) {
@@ -564,7 +564,7 @@ EOL;
 		foreach ( $suites as $suite ) {
 			$suite_path = sprintf( '%s/%s.suite.yml', $tests_folder, $suite );
 			copy( sprintf( $template_path, $suite ), $suite_path );
-			mkdir( $tests_folder . '/' . $suite );
+			mkdir( $tests_folder . '/' . $suite, 0755, true );
 		}
 
 		$output->write( sprintf( '<info>Created test suites (%s) in %s.</info>', implode( ',', $suites ), $tests_folder ) );
