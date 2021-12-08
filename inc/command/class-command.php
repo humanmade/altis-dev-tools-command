@@ -30,7 +30,7 @@ class Command extends BaseCommand {
 			new InputOption( 'path', 'p', InputArgument::OPTIONAL, 'Use a custom path for tests folder.', 'tests' ),
 			new InputOption( 'output', 'o', InputArgument::OPTIONAL, 'Use a custom path for output folder.', '' ),
 			new InputOption( 'browser', 'b', InputArgument::OPTIONAL, 'Run a headless Chrome browser for acceptance tests, use "chrome", or "firefox"', 'chrome' ),
-			new InputOption( 'continue', 'c', InputArgument::OPTIONAL, 'Continue running suites even after one fails.' ),
+			new InputOption( 'all', 'a', InputOption::VALUE_NONE, 'Run all suites even if one fails.' ),
 			new InputArgument( 'options', InputArgument::IS_ARRAY ),
 		] );
 		$this->setHelp(
@@ -44,11 +44,11 @@ To run PHPUnit integration tests:
                                 if you are running Local Chassis.
 
 To run Codeception commands:
-    codecept [<subcommand>] [-p <path>] [-b <browser>] [-o <output-folder>] [-c] [<suite-name>] [--] [options]
+    codecept [<subcommand>] [-p <path>] [-b <browser>] [-o <output-folder>] [-a] [<suite-name>] [--] [options]
                                 Use -p to specify the path to tests folder.
                                 Use -b to select a browser, eg: `chrome` or `firefox`.
                                 Use -o to specify the output folder.
-                                Use -c to continue executing suites even if one fails.
+                                Use -a to continue executing all suites even if one fails.
                                 Use `--` to send arguments to Codeception.
 EOT
 		);
