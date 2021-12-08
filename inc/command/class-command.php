@@ -214,7 +214,7 @@ EOT
 	 */
 	protected function codecept( InputInterface $input, OutputInterface $output ) {
 		$options = $input->getArgument( 'options' );
-		$tests_folder = untrailingslashit( $input->getOption( 'path' ) );
+		$tests_folder = rtrim( $input->getOption( 'path' ), '\\/' );
 		$output_folder = $input->getOption( 'output' );
 		$run_headless_browser = $input->getOption( 'browser' );
 		$use_chassis = $input->getOption( 'chassis' );
