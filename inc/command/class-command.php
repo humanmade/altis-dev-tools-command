@@ -219,10 +219,9 @@ EOT
 		$run_headless_browser = $input->getOption( 'browser' );
 		$use_chassis = $input->getOption( 'chassis' );
 		$project_subdomain = $this->get_project_subdomain();
-		$subsubcommand = $input->getArguments()['options'][0] ?? '';
 		$test_suite = $this->get_test_suite_argument( $input );
 
-		if ( $subsubcommand === 'bootstrap' ) {
+		if ( $input->hasParameterOption( 'bootstrap', true ) ) {
 			return $this->bootstrap_codecept( $tests_folder, $input, $output );
 		}
 
