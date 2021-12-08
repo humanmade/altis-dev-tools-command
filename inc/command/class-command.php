@@ -220,11 +220,6 @@ EOT
 		$use_chassis = $input->getOption( 'chassis' );
 		$options = $input->getArgument( 'options' );
 		$subsubcommand = $options[0];
-		$test_suite = $options[1];
-
-		if ( $subsubcommand === 'bootstrap' ) {
-			return $this->bootstrap_codecept( $input, $output );
-		}
 
 		// Working directory for codeception is `vendor`, so need to go up once to resolve relative paths correctly.
 		$tests_folder = '../' . $tests_folder;
@@ -386,13 +381,6 @@ EOT
 		// Convert to YAML.
 		$yaml = Yaml::dump( $config, 2, 4, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK );
 
-		// Write the file.
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
-		file_put_contents(
-			$this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'codeception.yml',
-			$yaml
-		);
-
 		$db_host = $use_chassis ? 'localhost' : 'db';
 		$test_env = <<<EOL
 TEST_SITE_DB_DSN=mysql:host=$db_host;dbname=test
@@ -417,6 +405,13 @@ TEST_DB_PASSWORD=wordpress
 TEST_TABLE_PREFIX=wp_
 EOL;
 
+		// Write the file.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
+		file_put_contents(
+			$this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'codeception.yml',
+			$yaml
+		);
+
 		// Write the env file.
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
 		file_put_contents(
@@ -426,73 +421,19 @@ EOL;
 
 		// Check for passed config option.
 		if ( ! preg_match( '/(-c|--configuration)\s+/', implode( ' ', $options ) ) ) {
-			$options = array_merge(
+			$input->setArgument( 'options', array_merge(
+				$options,
+				in_array( '--', $options, true ) ? [] : [ '--' ],
 				[ '-c', 'vendor/codeception.yml' ],
-				$options
-			);
+			) );
 		}
 
-		if ( $test_suite ) {
-			$suites = [ $test_suite ];
+		if ( $subsubcommand === 'bootstrap' ) {
+			return $this->codecept_bootstrap( $input, $output );
+		} elseif ( $subsubcommand === 'run' ) {
+			$return = $this->codecept_run( $input, $output );
 		} else {
-			// Codeception command runs within `vendor` directory, so paths are relative to that.
-			$suites = $this->get_test_suites( 'vendor/' . $tests_folder );
-			$output->write(
-				sprintf( '<info>Detected %d suites, (%s)..</info>', count( $suites ), implode( ', ', $suites ) ),
-				true,
-				$output::VERBOSITY_NORMAL
-			);
-		}
-
-		$return = 0;
-
-		// Write temp file during test run.
-		$temp_run_file_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . '.test-running';
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
-		file_put_contents( $temp_run_file_path, 'true' );
-
-		// Iterate over the suites.
-		foreach ( $suites as $suite ) {
-			$output->write( sprintf( '<info>Running "%s" test suite..</info>', $suite ), true, $output::VERBOSITY_NORMAL );
-
-			// Ensure cache is clean.
-			$this->run_command( $input, $output, 'wp', [ 'cache', 'flush', '--quiet' ] );
-
-			// Create database if needed.
-			if ( $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPDb' ) ) {
-				$this->create_test_db( $input, $output );
-
-				register_shutdown_function( function() use ( $input, $output, $temp_run_file_path ) {
-					$output->write( '<info>Removing test databases..</info>', true, $output::VERBOSITY_NORMAL );
-					$this->delete_test_db( $input, $output );
-					unlink( $temp_run_file_path );
-				} );
-			}
-
-			// Run the headless browser container if needed.
-			if ( $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPWebDriver' ) ) {
-				// Start a new container.
-				$this->start_browser_container( $input, $output );
-
-				// Stop the container on shutdown.
-				register_shutdown_function( function() use ( $input, $output ) {
-					$output->write( '<info>Removing headless browser container..</info>', true, $output::VERBOSITY_NORMAL );
-					$this->stop_browser_container( $input, $output );
-				} );
-			}
-
-			// Add the suite name to options here, if not passed already, and we have more than one.
-			if ( empty( $test_suite ) ) {
-				$options = $this->add_suite_name_to_options( $options, $suite );
-			}
-
-			$output->write( '<info>Running CodeCeption..</info>', true, $output::VERBOSITY_NORMAL );
-			$return = $return ?: $this->run_command( $input, $output, 'vendor/bin/codecept', $options );
-
-			// Stop executing rest of the suites if one fails and `continue` argument is absent.
-			if ( $return && ! $input->getOption( 'continue' ) ) {
-				break;
-			}
+			$return = $this->codecept_passthru( $input, $output );
 		}
 
 		return $return;
@@ -531,9 +472,9 @@ EOL;
 	 * @param InputInterface $input
 	 * @param OutputInterface $output
 	 *
-	 * @return void
+	 * @return int
 	 */
-	protected function bootstrap_codecept( InputInterface $input, OutputInterface $output ) {
+	protected function codecept_bootstrap( InputInterface $input, OutputInterface $output ) : int {
 		$default_suites = $this->get_test_suites( 'vendor/altis/dev-tools/tests' );
 
 		$tests_folder = rtrim( $input->getOption( 'path' ), '\\/' );
@@ -585,6 +526,101 @@ EOL;
 		}
 
 		$output->write( sprintf( '<info>Created test suites (%s) in %s.</info>', implode( ',', $selected_suites ), $tests_folder ) );
+
+		return 0;
+	}
+
+	/**
+	 * Run Codeception on selectde/all test suites.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function codecept_run( InputInterface $input, OutputInterface $output ) : int {
+		$tests_folder = '../' . rtrim( $input->getOption( 'path' ), '\\/' );
+		$options = $input->getArgument( 'options' );
+		$test_suite = isset( $options[1] ) && 0 !== strpos( $options[1], '-' ) ? $options[1] : '';
+
+		if ( $test_suite ) {
+			$suites = explode( ',', $test_suite );
+		} else {
+			// Codeception command runs within `vendor` directory, so paths are relative to that.
+			$suites = $this->get_test_suites( 'vendor/' . $tests_folder );
+		}
+
+		$output->write(
+			sprintf( '<info>Running %d suite(s), (%s)..</info>', count( $suites ), implode( ', ', $suites ) ),
+			true,
+			$output::VERBOSITY_NORMAL
+		);
+
+		$return = 0;
+
+		// Write temp file during test run.
+		$temp_run_file_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . '.test-running';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
+		file_put_contents( $temp_run_file_path, 'true' );
+
+		// Iterate over the suites.
+		foreach ( $suites as $suite ) {
+			$output->write( sprintf( '<info>Running "%s" test suite..</info>', $suite ), true, $output::VERBOSITY_NORMAL );
+
+			// Ensure cache is clean.
+			$this->run_command( $input, $output, 'wp', [ 'cache', 'flush', '--quiet' ] );
+
+			// Create database if needed.
+			if ( $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPDb' ) ) {
+				$this->create_test_db( $input, $output );
+
+				register_shutdown_function( function() use ( $input, $output, $temp_run_file_path ) {
+					$output->write( '<info>Removing test databases..</info>', true, $output::VERBOSITY_NORMAL );
+					$this->delete_test_db( $input, $output );
+					unlink( $temp_run_file_path );
+				} );
+			}
+
+			// Run the headless browser container if needed.
+			if ( $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPWebDriver' ) ) {
+				// Start a new container.
+				$this->start_browser_container( $input, $output );
+
+				// Stop the container on shutdown.
+				register_shutdown_function( function() use ( $input, $output ) {
+					$output->write( '<info>Removing headless browser container..</info>', true, $output::VERBOSITY_NORMAL );
+					$this->stop_browser_container( $input, $output );
+				} );
+			}
+
+			// Add the suite name to options here, if not passed already, and we have more than one.
+			$suite_options = $this->add_suite_name_to_options( $options, $suite, $test_suite );
+
+			$output->write( '<info>Running CodeCeption..</info>', true, $output::VERBOSITY_NORMAL );
+			$return = $return ?: $this->run_command( $input, $output, 'vendor/bin/codecept', $suite_options );
+
+			// Stop executing the rest of the suites if one fails and `continue` argument is absent.
+			if ( $return && ! $input->getOption( 'all' ) ) {
+				break;
+			}
+		}
+
+		return $return;
+	}
+
+
+	/**
+	 * Run Codeception arbitrary commands.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function codecept_passthru( InputInterface $input, OutputInterface $output ) : int {
+		$options = $input->getArgument( 'options' );
+		$output->write( '<info>Running CodeCeption..</info>', true, $output::VERBOSITY_NORMAL );
+		return $this->run_command( $input, $output, 'vendor/bin/codecept', $options );
 	}
 
 	/**
@@ -802,11 +838,21 @@ EOL;
 	 *
 	 * @param array $options Options array.
 	 * @param string $suite_name Suite name.
+	 * @param string $test_suite_arg Test suite parameter from CLI args.
 	 *
 	 * @return array
 	 */
-	protected function add_suite_name_to_options( array $options, string $suite_name ) : array {
-		$index = array_search( 'run', $options );
+	protected function add_suite_name_to_options( array $options, string $suite_name, string $test_suite_arg ) : array {
+		if ( $suite_name === $test_suite_arg ) {
+			return $options;
+		}
+		// If we had a test suite param from CLI args, remove it first.
+		if ( $test_suite_arg ) {
+			$options = array_diff( $options, [ $test_suite_arg ] );
+		}
+
+		// Then add the current test suite name.
+		$index = array_search( 'run', $options, true );
 		array_splice( $options, $index + 1, 0, [ $suite_name ] );
 		return $options;
 	}
