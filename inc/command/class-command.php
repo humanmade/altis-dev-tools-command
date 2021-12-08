@@ -211,16 +211,17 @@ EOT
 	 * @return int
 	 */
 	protected function codecept( InputInterface $input, OutputInterface $output ) {
-		$options = $input->getArgument( 'options' );
+		$project_subdomain = $this->get_project_subdomain();
 		$tests_folder = rtrim( $input->getOption( 'path' ), '\\/' );
 		$output_folder = $input->getOption( 'output' );
 		$run_headless_browser = $input->getOption( 'browser' );
 		$use_chassis = $input->getOption( 'chassis' );
-		$project_subdomain = $this->get_project_subdomain();
-		$test_suite = $this->get_test_suite_argument( $input );
+		$options = $input->getArgument( 'options' );
+		$subsubcommand = $options[0];
+		$test_suite = $options[1];
 
-		if ( $input->hasParameterOption( 'bootstrap', true ) ) {
-			return $this->bootstrap_codecept( $tests_folder, $input, $output );
+		if ( $subsubcommand === 'bootstrap' ) {
+			return $this->bootstrap_codecept( $input, $output );
 		}
 
 		// Working directory for codeception is `vendor`, so need to go up once to resolve relative paths correctly.
@@ -520,21 +521,31 @@ EOL;
 	/**
 	 * Bootstrap tests folder.
 	 *
-	 * @param string $tests_folder Target folder to boostrap the tests into.
 	 * @param InputInterface $input
 	 * @param OutputInterface $output
 	 *
 	 * @return void
 	 */
-	protected function bootstrap_codecept( string $tests_folder, InputInterface $input, OutputInterface $output ) {
+	protected function bootstrap_codecept( InputInterface $input, OutputInterface $output ) {
 		$default_suites = $this->get_test_suites( 'vendor/altis/dev-tools/tests' );
 
-		$suites = $input->getArguments()['options'][1] ?? '';
-		if ( 0 === strpos( $suites, '-' ) ) {
-			$suites = $default_suites;
+		$tests_folder = rtrim( $input->getOption( 'path' ), '\\/' );
+		$selected_suites = $input->getArgument( 'options' )[1] ?? '';
+
+		// If no option argument is found, and we hit a parameter argument,
+		// then no suite is specified. eg: codecept run -- -o something.
+		if ( 0 === strpos( $selected_suites, '-' ) ) {
+			$selected_suites = [];
 		} else {
-			$suites = explode( ',', $suites );
-			$invalid = array_diff( $suites, $default_suites );
+			$selected_suites = explode( ',', $selected_suites );
+		}
+
+		if ( empty( $selected_suites ) ) {
+			$selected_suites = $default_suites;
+		}
+
+		if ( $selected_suites ) {
+			$invalid = array_diff( $selected_suites, $default_suites );
 			if ( count( $invalid ) ) {
 				throw new Exception(
 					sprintf(
@@ -552,7 +563,7 @@ EOL;
 		if ( ! file_exists( $tests_folder ) ) {
 			mkdir( $tests_folder, 0755, true );
 		} else {
-			foreach ( $suites as $suite ) {
+			foreach ( $selected_suites as $suite ) {
 				if ( file_exists( $tests_folder . '/' . $suite ) ) {
 					throw new Exception( sprintf( 'An existing "%s" suite was found, halting execution.', $suite ) );
 				}
@@ -560,13 +571,13 @@ EOL;
 		}
 
 		$template_path = 'vendor/altis/dev-tools/tests/%s.suite.yml';
-		foreach ( $suites as $suite ) {
+		foreach ( $selected_suites as $suite ) {
 			$suite_path = sprintf( '%s/%s.suite.yml', $tests_folder, $suite );
 			copy( sprintf( $template_path, $suite ), $suite_path );
 			mkdir( $tests_folder . '/' . $suite, 0755, true );
 		}
 
-		$output->write( sprintf( '<info>Created test suites (%s) in %s.</info>', implode( ',', $suites ), $tests_folder ) );
+		$output->write( sprintf( '<info>Created test suites (%s) in %s.</info>', implode( ',', $selected_suites ), $tests_folder ) );
 	}
 
 	/**
@@ -777,25 +788,6 @@ EOL;
 		$needs_web_driver = preg_match( "#- {$module}#", $suite_config );
 
 		return $needs_web_driver;
-	}
-
-	/**
-	 * Return the test suite selected from CLI arguments.
-	 *
-	 * @param InputInterface $input
-	 *
-	 * @return string
-	 */
-	protected function get_test_suite_argument( InputInterface $input ) : string {
-		$arguments = $input->getArguments();
-		$first_argument = $arguments['options'][1] ?? '';
-
-		// Test suite should be the first argumet so we can check for it, otherwise, assume no suite is selected.
-		if ( 0 === strpos( $first_argument, '-' ) ) {
-			return '';
-		}
-
-		return $first_argument;
 	}
 
 	/**
