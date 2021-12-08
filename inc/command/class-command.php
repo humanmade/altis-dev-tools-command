@@ -42,14 +42,12 @@ To run PHPUnit integration tests:
                                 pass to phpunit. Use the --chassis option
                                 if you are running Local Chassis.
 
-To run Codeception integration tests:
-    codecept [--chassis] -p <path> -b <browser> -o <output-folder> [--] [options]
-                                use `--` to separate arguments you want to
-                                pass to Codeception. Use the --chassis option
-                                if you are running Local Chassis. Use -p path
-                                to specify custom tests folder. Use --browser/-b
-                                to run a headless browser container for acceptance tests,
-                                choose 'chrome', or 'firefox' as needed.
+To run Codeception commands:
+    codecept <subcommand> -p <path> -b <browser> -o <output-folder> <suite-name> [--] [options]
+                                Use -p to specify the path to tests folder.
+                                Use -b to select a browser, eg: `chrome` or `firefox`.
+                                Use -o to specify the output folder.
+                                Use `--` to send arguments to Codeception.
 EOT
 		);
 	}
