@@ -29,7 +29,8 @@ class Command extends BaseCommand {
 			new InputOption( 'chassis', null, null, 'Run commands in the Local Chassis environment' ),
 			new InputOption( 'path', 'p', InputArgument::OPTIONAL, 'Use a custom path for tests folder.', 'tests' ),
 			new InputOption( 'output', 'o', InputArgument::OPTIONAL, 'Use a custom path for output folder.', '' ),
-			new InputOption( 'browser', 'b', InputArgument::OPTIONAL, 'Run a headless Chrome browser for acceptance tests, use "chrome", "firefox", or "edge"', 'chrome' ),
+			new InputOption( 'browser', 'b', InputArgument::OPTIONAL, 'Run a headless Chrome browser for acceptance tests, use "chrome", or "firefox"', 'chrome' ),
+			new InputOption( 'continue', 'c', InputArgument::OPTIONAL, 'Continue running suites even after one fails.' ),
 			new InputArgument( 'options', InputArgument::IS_ARRAY ),
 		] );
 		$this->setHelp(
@@ -43,10 +44,11 @@ To run PHPUnit integration tests:
                                 if you are running Local Chassis.
 
 To run Codeception commands:
-    codecept <subcommand> -p <path> -b <browser> -o <output-folder> <suite-name> [--] [options]
+    codecept [<subcommand>] [-p <path>] [-b <browser>] [-o <output-folder>] [-c] [<suite-name>] [--] [options]
                                 Use -p to specify the path to tests folder.
                                 Use -b to select a browser, eg: `chrome` or `firefox`.
                                 Use -o to specify the output folder.
+                                Use -c to continue executing suites even if one fails.
                                 Use `--` to send arguments to Codeception.
 EOT
 		);
@@ -442,7 +444,7 @@ EOL;
 			);
 		}
 
-		$return = '';
+		$return = 0;
 
 		// Write temp file during test run.
 		$temp_run_file_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . '.test-running';
@@ -485,7 +487,12 @@ EOL;
 			}
 
 			$output->write( '<info>Running CodeCeption..</info>', true, $output::VERBOSITY_NORMAL );
-			$return = $this->run_command( $input, $output, 'vendor/bin/codecept', $options );
+			$return = $return ?: $this->run_command( $input, $output, 'vendor/bin/codecept', $options );
+
+			// Stop executing rest of the suites if one fails and `continue` argument is absent.
+			if ( $return && ! $input->getOption( 'continue' ) ) {
+				break;
+			}
 		}
 
 		return $return;
