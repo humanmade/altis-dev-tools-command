@@ -450,7 +450,7 @@ EOL;
 	 */
 	protected function run_command( InputInterface $input, OutputInterface $output, string $command, array $options = [] ) {
 		$use_chassis = $input->getOption( 'chassis' );
-		$cli = $this->getApplication()->find( $use_chassis ? 'chassis' : 'local-server' );
+		$cli = $this->getApplication()->find( $use_chassis ? 'chassis' : 'server' );
 
 		// Add the command, default options and input options together.
 		$options = array_merge(
@@ -610,7 +610,6 @@ EOL;
 		return $return;
 	}
 
-
 	/**
 	 * Run Codeception arbitrary commands.
 	 *
@@ -650,7 +649,7 @@ EOL;
 				],
 			] ), $output );
 		} else {
-			$cli = $this->getApplication()->find( 'local-server' );
+			$cli = $this->getApplication()->find( 'server' );
 
 			$return_val = $cli->run( new ArrayInput( [
 				'subcommand' => 'db',
@@ -689,7 +688,7 @@ EOL;
 				],
 			] ), $output );
 		} else {
-			$cli = $this->getApplication()->find( 'local-server' );
+			$cli = $this->getApplication()->find( 'server' );
 
 			$return_val = $cli->run( new ArrayInput( [
 				'subcommand' => 'db',
