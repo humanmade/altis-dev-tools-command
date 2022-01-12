@@ -562,6 +562,9 @@ EOL;
 		$temp_run_file_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . '.test-running';
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
 		file_put_contents( $temp_run_file_path, 'true' );
+		register_shutdown_function( function() use ( $temp_run_file_path ) {
+			unlink( $temp_run_file_path );
+		} );
 
 		// Iterate over the suites.
 		foreach ( $suites as $suite ) {
@@ -577,7 +580,6 @@ EOL;
 				register_shutdown_function( function() use ( $input, $output, $temp_run_file_path ) {
 					$output->write( '<info>Removing test databases..</info>', true, $output::VERBOSITY_NORMAL );
 					$this->delete_test_db( $input, $output );
-					unlink( $temp_run_file_path );
 				} );
 			}
 
