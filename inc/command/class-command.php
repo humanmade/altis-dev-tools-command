@@ -566,6 +566,10 @@ EOL;
 			unlink( $temp_run_file_path );
 		} );
 
+		// Track db and browser container creation.
+		$has_created_db = false;
+		$has_created_browser = false;
+
 		// Iterate over the suites.
 		foreach ( $suites as $suite ) {
 			$output->write( sprintf( '<info>Running "%s" test suite..</info>', $suite ), true, $output::VERBOSITY_NORMAL );
@@ -574,19 +578,22 @@ EOL;
 			$this->run_command( $input, $output, 'wp', [ 'cache', 'flush', '--quiet' ] );
 
 			// Create database if needed.
-			if ( $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPDb' ) ) {
+			if ( ! $has_created_db && $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPDb' ) ) {
 				$this->create_test_db( $input, $output );
+				$has_created_db = true;
 
-				register_shutdown_function( function() use ( $input, $output, $temp_run_file_path ) {
+				// Remove the db on shutdown.
+				register_shutdown_function( function() use ( $input, $output ) {
 					$output->write( '<info>Removing test databases..</info>', true, $output::VERBOSITY_NORMAL );
 					$this->delete_test_db( $input, $output );
 				} );
 			}
 
 			// Run the headless browser container if needed.
-			if ( $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPWebDriver' ) ) {
+			if ( ! $has_created_browser && $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPWebDriver' ) ) {
 				// Start a new container.
 				$this->start_browser_container( $input, $output );
+				$has_created_browser = true;
 
 				// Stop the container on shutdown.
 				register_shutdown_function( function() use ( $input, $output ) {
