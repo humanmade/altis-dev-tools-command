@@ -475,7 +475,7 @@ EOL;
 	 * @return int
 	 */
 	protected function codecept_bootstrap( InputInterface $input, OutputInterface $output ) : int {
-		$default_suites = $this->get_test_suites( 'vendor/altis/dev-tools/tests' );
+		$default_suites = $this->get_test_suites( 'vendor/altis/dev-tools/tests/_templates' );
 
 		$tests_folder = rtrim( $input->getOption( 'path' ), '\\/' );
 		$selected_suites = $input->getArgument( 'options' )[1] ?? '';
@@ -518,7 +518,7 @@ EOL;
 			}
 		}
 
-		$template_path = 'vendor/altis/dev-tools/tests/%s.suite.yml';
+		$template_path = 'vendor/altis/dev-tools/tests/_templates/%s.suite.yml';
 		foreach ( $selected_suites as $suite ) {
 			$suite_path = sprintf( '%s/%s.suite.yml', $tests_folder, $suite );
 			copy( sprintf( $template_path, $suite ), $suite_path );
