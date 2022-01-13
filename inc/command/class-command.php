@@ -450,7 +450,7 @@ EOL;
 	 */
 	protected function run_command( InputInterface $input, OutputInterface $output, string $command, array $options = [] ) {
 		$use_chassis = $input->getOption( 'chassis' );
-		$cli = $this->getApplication()->find( $use_chassis ? 'chassis' : 'local-server' );
+		$cli = $this->getApplication()->find( $use_chassis ? 'chassis' : 'server' );
 
 		// Add the command, default options and input options together.
 		$options = array_merge(
@@ -562,6 +562,13 @@ EOL;
 		$temp_run_file_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . '.test-running';
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
 		file_put_contents( $temp_run_file_path, 'true' );
+		register_shutdown_function( function() use ( $temp_run_file_path ) {
+			unlink( $temp_run_file_path );
+		} );
+
+		// Track db and browser container creation.
+		$has_created_db = false;
+		$has_created_browser = false;
 
 		// Iterate over the suites.
 		foreach ( $suites as $suite ) {
@@ -571,20 +578,22 @@ EOL;
 			$this->run_command( $input, $output, 'wp', [ 'cache', 'flush', '--quiet' ] );
 
 			// Create database if needed.
-			if ( $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPDb' ) ) {
+			if ( ! $has_created_db && $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPDb' ) ) {
 				$this->create_test_db( $input, $output );
+				$has_created_db = true;
 
-				register_shutdown_function( function() use ( $input, $output, $temp_run_file_path ) {
+				// Remove the db on shutdown.
+				register_shutdown_function( function() use ( $input, $output ) {
 					$output->write( '<info>Removing test databases..</info>', true, $output::VERBOSITY_NORMAL );
 					$this->delete_test_db( $input, $output );
-					unlink( $temp_run_file_path );
 				} );
 			}
 
 			// Run the headless browser container if needed.
-			if ( $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPWebDriver' ) ) {
+			if ( ! $has_created_browser && $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPWebDriver' ) ) {
 				// Start a new container.
 				$this->start_browser_container( $input, $output );
+				$has_created_browser = true;
 
 				// Stop the container on shutdown.
 				register_shutdown_function( function() use ( $input, $output ) {
@@ -607,7 +616,6 @@ EOL;
 
 		return $return;
 	}
-
 
 	/**
 	 * Run Codeception arbitrary commands.
@@ -648,7 +656,7 @@ EOL;
 				],
 			] ), $output );
 		} else {
-			$cli = $this->getApplication()->find( 'local-server' );
+			$cli = $this->getApplication()->find( 'server' );
 
 			$return_val = $cli->run( new ArrayInput( [
 				'subcommand' => 'db',
@@ -687,7 +695,7 @@ EOL;
 				],
 			] ), $output );
 		} else {
-			$cli = $this->getApplication()->find( 'local-server' );
+			$cli = $this->getApplication()->find( 'server' );
 
 			$return_val = $cli->run( new ArrayInput( [
 				'subcommand' => 'db',
