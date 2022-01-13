@@ -558,6 +558,9 @@ EOL;
 
 		$return = 0;
 
+		// Ensure cache is clean before adding `.test-running` file and entering test mode.
+		$this->run_command( $input, $output, 'wp', [ 'cache', 'flush', '--quiet' ] );
+
 		// Write temp file during test run.
 		$temp_run_file_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . '.test-running';
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
@@ -573,9 +576,6 @@ EOL;
 		// Iterate over the suites.
 		foreach ( $suites as $suite ) {
 			$output->write( sprintf( '<info>Running "%s" test suite..</info>', $suite ), true, $output::VERBOSITY_NORMAL );
-
-			// Ensure cache is clean.
-			$this->run_command( $input, $output, 'wp', [ 'cache', 'flush', '--quiet' ] );
 
 			// Create database if needed.
 			if ( ! $has_created_db && $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPDb' ) ) {
@@ -607,6 +607,9 @@ EOL;
 
 			$output->write( '<info>Running CodeCeption..</info>', true, $output::VERBOSITY_NORMAL );
 			$return = $return ?: $this->run_command( $input, $output, 'vendor/bin/codecept', $suite_options );
+
+			// Ensure cache is clean before next suite.
+			$this->run_command( $input, $output, 'wp', [ 'cache', 'flush', '--quiet' ] );
 
 			// Stop executing the rest of the suites if one fails and `continue` argument is absent.
 			if ( $return && ! $input->getOption( 'all' ) ) {
