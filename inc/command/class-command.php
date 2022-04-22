@@ -219,7 +219,7 @@ EOT
 		$run_headless_browser = $input->getOption( 'browser' );
 		$use_chassis = $input->getOption( 'chassis' );
 		$options = $input->getArgument( 'options' );
-		$subsubcommand = $options[0];
+		$subsubcommand = $options[0] ?? null;
 
 		// Working directory for codeception is `vendor`, so need to go up once to resolve relative paths correctly.
 		$tests_folder = '../' . $tests_folder;
