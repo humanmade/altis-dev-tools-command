@@ -372,6 +372,9 @@ EOT
 			'params' => [
 				'codeception.env',
 			],
+			'settings' => [
+				'error_level' => 'E_ALL & ~E_STRICT & ~E_DEPRECATED & ~E_USER_WARNING',
+			],
 		];
 
 		// Merge config from composer.json.
