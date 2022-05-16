@@ -316,6 +316,8 @@ EOT
 						'wait' => 20,
 						'window_size' => false, // disabled for Chrome driver.
 						'capabilities' => [
+							'acceptInsecureCerts' => true,
+							'unexpectedAlertBehaviour' => 'accept',
 							'chromeOptions' => [
 								'args' => [
 									'--headless',
@@ -353,11 +355,12 @@ EOT
 						'dbHost' => '%TEST_DB_HOST%',
 						'dbUser' => '%TEST_DB_USER%',
 						'dbPassword' => '%TEST_DB_PASSWORD%',
+						'dbCharset' => 'utf8mb4',
 						'tablePrefix' => '%TEST_TABLE_PREFIX%',
 						'domain' => '%TEST_SITE_WP_DOMAIN%',
 						'adminEmail' => '%TEST_SITE_ADMIN_EMAIL%',
 						'title' => 'Test',
-						'theme' => 'default',
+						'theme' => '',
 						'plugins' => [],
 						'activatePlugins' => [],
 						'multisite' => true,
@@ -562,7 +565,7 @@ EOL;
 		$return = 0;
 
 		// Ensure cache is clean before adding `.test-running` file and entering test mode.
-		$this->run_command( $input, $output, 'wp', [ 'cache', 'flush', '--quiet' ] );
+		$this->flush_cache( $input, $output );
 
 		// Write temp file during test run.
 		$temp_run_file_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . '.test-running';
@@ -581,7 +584,9 @@ EOL;
 			$output->write( sprintf( '<info>Running "%s" test suite..</info>', $suite ), true, $output::VERBOSITY_NORMAL );
 
 			// Create database if needed.
-			if ( ! $has_created_db && $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPDb' ) ) {
+			$using_wpdb = $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPDb' );
+			$using_wploader = $this->suite_has_module( 'vendor/' . $tests_folder . '/' . $suite . '.suite.yml', 'WPLoader' );
+			if ( ! $has_created_db && ( $using_wpdb || $using_wploader ) ) {
 				$this->create_test_db( $input, $output );
 				$has_created_db = true;
 
@@ -612,7 +617,7 @@ EOL;
 			$return = $return ?: $this->run_command( $input, $output, 'vendor/bin/codecept', $suite_options );
 
 			// Ensure cache is clean before next suite.
-			$this->run_command( $input, $output, 'wp', [ 'cache', 'flush', '--quiet' ] );
+			$this->flush_cache( $input, $output );
 
 			// Stop executing the rest of the suites if one fails and `continue` argument is absent.
 			if ( $return && ! $input->getOption( 'all' ) ) {
@@ -648,6 +653,8 @@ EOL;
 	protected function create_test_db( InputInterface $input, OutputInterface $output ) {
 		$use_chassis = $input->getOption( 'chassis' );
 
+		$sql_query = 'DROP DATABASE IF EXISTS test; DROP DATABASE IF EXISTS test2; CREATE DATABASE test; CREATE DATABASE test2; GRANT ALL PRIVILEGES ON test.* TO wordpress; GRANT ALL PRIVILEGES ON test2.* TO wordpress;';
+
 		if ( $use_chassis ) {
 			$cli = $this->getApplication()->find( 'chassis' );
 
@@ -658,7 +665,7 @@ EOL;
 					'-uroot',
 					'-ppassword',
 					'-e',
-					'"CREATE DATABASE IF NOT EXISTS test; CREATE DATABASE IF NOT EXISTS test2; GRANT ALL PRIVILEGES ON test.* TO wordpress@localhost IDENTIFIED BY \"wordpress\"; GRANT ALL PRIVILEGES ON test2.* TO wordpress@localhost IDENTIFIED BY \"wordpress\";"',
+					'"' . $sql_query . '"',
 				],
 			] ), $output );
 		} else {
@@ -668,7 +675,7 @@ EOL;
 				'subcommand' => 'db',
 				'options' => [
 					'exec',
-					'DROP DATABASE IF EXISTS test; DROP DATABASE IF EXISTS test2; CREATE DATABASE test; CREATE DATABASE test2; GRANT ALL PRIVILEGES ON test.* TO wordpress IDENTIFIED BY \"wordpress\"; GRANT ALL PRIVILEGES ON test2.* TO wordpress IDENTIFIED BY \"wordpress\";',
+					$sql_query,
 				],
 			] ), $output );
 		}
@@ -687,6 +694,8 @@ EOL;
 	protected function delete_test_db( InputInterface $input, OutputInterface $output ) {
 		$use_chassis = $input->getOption( 'chassis' );
 
+		$sql_query = 'DROP DATABASE test; DROP DATABASE test2; REVOKE ALL PRIVILEGES on test.* FROM wordpress; REVOKE ALL PRIVILEGES on test2.* FROM wordpress;';
+
 		if ( $use_chassis ) {
 			$cli = $this->getApplication()->find( 'chassis' );
 
@@ -697,7 +706,7 @@ EOL;
 					'-uroot',
 					'-ppassword',
 					'-e',
-					'"DROP DATABASE test; DROP DATABASE test2; REVOKE ALL PRIVILEGES on test.* FROM wordpress; REVOKE ALL PRIVILEGES on test2.* FROM wordpress;"',
+					'"' . $sql_query . '"',
 				],
 			] ), $output );
 		} else {
@@ -707,7 +716,7 @@ EOL;
 				'subcommand' => 'db',
 				'options' => [
 					'exec',
-					'DROP DATABASE test; DROP DATABASE test2; REVOKE ALL PRIVILEGES on test.* FROM wordpress; REVOKE ALL PRIVILEGES on test2.* FROM wordpress;',
+					$sql_query,
 				],
 			] ), $output );
 		}
@@ -745,6 +754,39 @@ EOL;
 		}
 
 		return preg_replace( '/[^A-Za-z0-9\-\_]/', '', $project_name );
+	}
+
+	/**
+	 * Clean the redis cache.
+	 *
+	 * We avoid relying on WP CLI because of the different databases / contexts used for
+	 * different suites. It can result in database connection failed errors.
+	 *
+	 * @param
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function flush_cache( InputInterface $input, OutputInterface $output ) {
+		$use_chassis = $input->getOption( 'chassis' );
+
+		$output->writeln( 'Flushing the cache...' );
+
+		if ( $use_chassis ) {
+			$return_val = $this->run_command( $input, $output, 'redis-cli FLUSHALL' );
+		} else {
+			$base_command = sprintf(
+				'docker exec %1$s-redis redis-cli FLUSHALL &> /dev/null',
+				$this->get_project_subdomain()
+			);
+			passthru( $base_command, $return_val );
+		}
+
+		if ( $return_val ) {
+			$output->writeln( '<error>Cache could not be flushed, the Redis service may not be in use or not running.</>' );
+		}
+
+		return $return_val;
 	}
 
 	/**
