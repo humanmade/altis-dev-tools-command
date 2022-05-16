@@ -280,7 +280,7 @@ EOT
 								'--skip-email --skip-config && wp altis migrate --url=%2$s',
 							'%TEST_SITE_DB_NAME%',
 							'%TEST_SITE_WP_URL%',
-							'%TEST_SITE_WP_DOMAIN%',
+							'%TEST_SITE_WP_DOMAIN%'
 						),
 						'populate' => true,
 						'cleanup' => false,
