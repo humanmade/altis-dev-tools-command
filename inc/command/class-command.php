@@ -608,7 +608,7 @@ EOL;
 			// Add the suite name to options here, if not passed already, and we have more than one.
 			$suite_options = $this->add_suite_name_to_options( $options, $suite, $test_suite );
 
-			$output->write( '<info>Running CodeCeption..</info>', true, $output::VERBOSITY_NORMAL );
+			$output->write( '<info>Running Codeception..</info>', true, $output::VERBOSITY_NORMAL );
 			$return = $return ?: $this->run_command( $input, $output, 'vendor/bin/codecept', $suite_options );
 
 			// Ensure cache is clean before next suite.
@@ -633,7 +633,7 @@ EOL;
 	 */
 	protected function codecept_passthru( InputInterface $input, OutputInterface $output ) : int {
 		$options = $input->getArgument( 'options' );
-		$output->write( '<info>Running CodeCeption..</info>', true, $output::VERBOSITY_NORMAL );
+		$output->write( '<info>Running Codeception..</info>', true, $output::VERBOSITY_NORMAL );
 		return $this->run_command( $input, $output, 'vendor/bin/codecept', $options );
 	}
 
