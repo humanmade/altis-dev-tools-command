@@ -430,7 +430,7 @@ EOL;
 			$input->setArgument( 'options', array_merge(
 				$options,
 				in_array( '--', $options, true ) ? [] : [ '--' ],
-				[ '-c', 'vendor/codeception.yml' ],
+				[ '-c', 'vendor/codeception.yml' ]
 			) );
 		}
 
