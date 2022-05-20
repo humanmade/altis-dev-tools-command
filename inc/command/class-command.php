@@ -813,7 +813,7 @@ EOL;
 			throw new InvalidArgumentException( sprintf(
 				'Browser "%s" is unavailable, available browsers are: %s.',
 				$browser,
-				implode( ', ', $available_browsers ),
+				implode( ', ', $available_browsers )
 			) );
 		}
 
@@ -832,7 +832,7 @@ EOL;
 			$columns,
 			$lines,
 			$this->get_project_subdomain(),
-			$browser,
+			$browser
 		);
 
 		passthru( $base_command, $return_var );
