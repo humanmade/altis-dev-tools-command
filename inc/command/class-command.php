@@ -804,17 +804,16 @@ EOL;
 		$output->write( sprintf( '<info>Starting headless "%s" browser container..</info>', $browser ), true, $output::VERBOSITY_NORMAL );
 
 		$available_browsers = [
-			'chromium' => 'chromium',
-			'chrome' => 'chromium',
-			'firefox' => 'firefox',
-			// 'edge' => 'edge', // TODO Buggy driver, dig deeper.
+			'chrome',
+			'firefox',
+			// 'edge', // TODO Buggy driver, dig deeper.
 		];
 
-		if ( ! array_key_exists( $browser, $available_browsers ) ) {
+		if ( ! in_array( $browser, $available_browsers, true ) ) {
 			throw new InvalidArgumentException( sprintf(
 				'Browser "%s" is unavailable, available browsers are: %s.',
 				$browser,
-				implode( ', ', array_keys( $available_browsers ) ),
+				implode( ', ', $available_browsers ),
 			) );
 		}
 
@@ -829,11 +828,11 @@ EOL;
 				'--network=host ' .
 				'--name=%3$s_selenium ' .
 				'--shm-size="2g" ' .
-				'seleniarm/standalone-%4$s:4.0.0-20211213',
+				'selenium/standalone-%4$s:4.0.0-20211102',
 			$columns,
 			$lines,
 			$this->get_project_subdomain(),
-			$available_browsers[ $browser ],
+			$browser,
 		);
 
 		passthru( $base_command, $return_var );
