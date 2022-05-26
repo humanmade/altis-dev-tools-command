@@ -829,7 +829,7 @@ EOL;
 				'--network=host ' .
 				'--name=%3$s_selenium ' .
 				'--shm-size="2g" ' .
-				'seleniarm/standalone-%4$s:4.0.0-20211213',
+				'seleniarm/standalone-%4$s:4.1.4-20220429',
 			$columns,
 			$lines,
 			$this->get_project_subdomain(),
