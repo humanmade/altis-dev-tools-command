@@ -318,7 +318,7 @@ EOT
 						'capabilities' => [
 							'acceptInsecureCerts' => true,
 							'unexpectedAlertBehaviour' => 'accept',
-							'chromeOptions' => [
+							'goog:chromeOptions' => [
 								'args' => [
 									'--headless',
 									'--disable-gpu',
