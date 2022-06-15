@@ -25,7 +25,7 @@ class Command extends BaseCommand {
 		$this->setName( 'dev-tools' );
 		$this->setDescription( 'Developer tools' );
 		$this->setDefinition( [
-			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit | codecept' ),
+			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit | codecept | bootstrap' ),
 			new InputOption( 'chassis', null, null, 'Run commands in the Local Chassis environment' ),
 			new InputOption( 'path', 'p', InputArgument::OPTIONAL, 'Use a custom path for tests folder.', 'tests' ),
 			new InputOption( 'output', 'o', InputArgument::OPTIONAL, 'Use a custom path for output folder.', '' ),
@@ -50,6 +50,10 @@ To run Codeception commands:
                                 Use -o to specify the output folder.
                                 Use -a to continue executing all suites even if one fails.
                                 Use `--` to send arguments to Codeception.
+
+To Bootstrap configuration files:
+    bootstrap <config> [--] [options]
+                                <config> is the type of config to bootstrap, eg: codespaces
 EOT
 		);
 	}
@@ -68,6 +72,8 @@ EOT
 				return $this->phpunit( $input, $output );
 			case 'codecept':
 				return $this->codecept( $input, $output );
+			case 'bootstrap':
+				return $this->bootstrap( $input, $output );
 
 			default:
 				throw new CommandNotFoundException( sprintf( 'Subcommand "%s" is not defined.', $subcommand ) );
@@ -443,6 +449,70 @@ EOL;
 		}
 
 		return $return;
+	}
+
+	/**
+	 * Bootstraps configuration files.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function bootstrap( InputInterface $input, OutputInterface $output ) : int {
+		$configs = [ 'codespaces' ];
+
+		$options = $input->getArgument( 'options' );
+		$subsubcommand = $options[0] ?? null;
+
+		if ( empty( $subsubcommand ) ) {
+			$output->writeln( '<warning>You need to select a configuration set to bootstrap/generate.</warning>' );
+			$output->writeln( sprintf( 'Available configuration sets are: %s.', implode( ', ', $configs ) ) );
+			$output->writeln( 'eg: composer dev-tools bootstrap codespaces' );
+
+			return 1;
+		}
+
+		if ( ! in_array( $subsubcommand, $configs, true ) ) {
+			$output->writeln( sprintf( '<error>Could not find the target configuration set generator for "%s".</error>', $subsubcommand ) );
+			return 1;
+		}
+
+		call_user_func( [ $this, 'bootstrap_' . $subsubcommand ], $input, $output );
+
+		return 0;
+	}
+
+	/**
+	 * Bootstraps Codespaces devcontainer configuration files.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function bootstrap_codespaces( InputInterface $input, OutputInterface $output ) : int {
+		$target_folder = getcwd() . '/.devcontainer';
+		$template_folder = realpath( __DIR__ . '/../../templates/.devcontainer' );
+
+		if ( file_exists( $target_folder ) ) {
+			$output->writeln( '<error>Codespaces devcontainer configuration exists already at <root>/.devcontainer, aborting.</error>' );
+			return 1;
+		}
+
+		$base_command = sprintf( 'cp -r "%s" "%s" &> /dev/null', $template_folder, $target_folder );
+		passthru( $base_command, $return_var );
+
+		if ( $return_var ) {
+			$output->writeln( '<error>Could not generate Codespaces devcontainer configuration, aborting.</error>' );
+			return 1;
+		}
+
+		$output->writeln( '<info>Files have been copied to the root of your project in .devcontainer folder.</info>' );
+		$output->writeln( '<info>Feel free to edit the generated config files to install system packages or editor extensions as needed.</info>' );
+		$output->writeln( '<info>Once ready, visit https://github.com/codespaces/new to create a new Codespace for your project repo.</info>' );
+
+		return 0;
 	}
 
 	/**
