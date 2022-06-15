@@ -5,7 +5,7 @@
 	"build": {
 		"dockerfile": "Dockerfile",
 		"args": {
-			"PHP_VERSION": "8",
+			"PHP_VERSION": "8.0",
 			"NODE_VERSION": "lts/*"
 		}
 	},
