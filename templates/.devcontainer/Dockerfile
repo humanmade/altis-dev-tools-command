@@ -11,9 +11,8 @@ RUN if [ "${NODE_VERSION}" != "none" ]; then su vscode -c "umask 0002 && . /usr/
 # Additional dependencies
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 	&& apt-get -y install --no-install-recommends libzip-dev \
-	&& pecl install zip \
-	&& echo "extension=zip" >> /usr/local/etc/php/conf.d/zip.ini \
-	&& rm -rf /tmp/pear \
+	&& docker-php-ext-install zip \
+	&& docker-php-source delete \
 	&& apt-get clean -y && rm -rf /var/lib/apt/lists/*
 
 # [Optional] Uncomment this line to install global node packages.
