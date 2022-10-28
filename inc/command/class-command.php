@@ -25,7 +25,7 @@ class Command extends BaseCommand {
 		$this->setName( 'dev-tools' );
 		$this->setDescription( 'Developer tools' );
 		$this->setDefinition( [
-			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit | codecept | bootstrap' ),
+			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit | codecept | bootstrap | lintdocs' ),
 			new InputOption( 'chassis', null, null, 'Run commands in the Local Chassis environment' ),
 			new InputOption( 'path', 'p', InputArgument::OPTIONAL, 'Use a custom path for tests folder.', 'tests' ),
 			new InputOption( 'output', 'o', InputArgument::OPTIONAL, 'Use a custom path for output folder.', '' ),
@@ -53,7 +53,7 @@ To run Codeception commands:
 
 To Bootstrap configuration files:
     bootstrap <config> [--] [options]
-                                <config> is the type of config to bootstrap, eg: codespaces
+                                <config> is the type of config to bootstrap, eg: codespaces | lintdocs
 EOT
 		);
 	}
@@ -460,7 +460,7 @@ EOL;
 	 * @return int
 	 */
 	protected function bootstrap( InputInterface $input, OutputInterface $output ) : int {
-		$configs = [ 'codespaces' ];
+		$configs = [ 'codespaces', 'lintdocs' ];
 
 		$options = $input->getArgument( 'options' );
 		$subsubcommand = $options[0] ?? null;
@@ -475,6 +475,7 @@ EOL;
 
 		if ( ! in_array( $subsubcommand, $configs, true ) ) {
 			$output->writeln( sprintf( '<error>Could not find the target configuration set generator for "%s".</error>', $subsubcommand ) );
+			$output->writeln( sprintf( 'Available configuration sets are: %s.', implode( ', ', $configs ) ) );
 			return 1;
 		}
 
@@ -514,6 +515,94 @@ EOL;
 
 		return 0;
 	}
+
+	/**
+	 * Bootstraps Docs linter configuration files.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function bootstrap_lintdocs( InputInterface $input, OutputInterface $output ) : int {
+
+		// Copy configuration files for Markdownlint
+		$target_folder = getcwd() . '/.markdownlint';
+		$template_folder = realpath( __DIR__ . '/../../templates/docslint/.markdownlint' );
+
+		if ( file_exists( $target_folder ) ) {
+			$output->writeln( '<error>Markdownlint configuration folder already exists at <root>/.markdownlint, not overwriting.</error>' );
+		} else {
+
+			$base_command = sprintf( 'cp -r "%s" "%s" &> /dev/null', $template_folder, $target_folder );
+			passthru( $base_command, $return_var );
+
+			if ( $return_var ) {
+				$output->writeln( '<error>Could not create markdownlint configuration folder, exiting.</error>' );
+
+				return 1;
+			}
+		}
+
+		$target_file = getcwd() . '/.markdownlint-cli2.yml';
+		$template_file = realpath( __DIR__ . '/../../templates/docslint/.markdownlint-cli2.yml' );
+
+		if ( file_exists( $target_file ) ) {
+			$output->writeln( '<error>Markdownlint configuration file already exists at <root>/.markdownlint-cli2.yml, not overwriting.</error>' );
+		} else {
+
+			$base_command = sprintf( 'cp "%s" "%s" &> /dev/null', $template_file, $target_file );
+			passthru( $base_command, $return_var );
+
+			if ( $return_var ) {
+				$output->writeln( '<error>Could not create markdownlint configuration file, exiting.</error>' );
+
+				return 1;
+			}
+		}
+
+		// Copy styles folder for Vale
+		$target_folder = getcwd() . '/styles';
+		$template_folder = realpath( __DIR__ . '/../../templates/docslint/styles' );
+
+		if ( file_exists( $target_folder ) ) {
+			$output->writeln( '<error>Documentation linter Style folder already exists at <root>/styles, not overwriting.</error>' );
+		} else {
+
+			$base_command = sprintf( 'cp -r "%s" "%s" &> /dev/null', $template_folder, $target_folder );
+			passthru( $base_command, $return_var );
+
+			if ( $return_var ) {
+				$output->writeln( '<error>Could not create documents linter styles folder, exiting.</error>' );
+
+				return 1;
+			}
+		}
+
+		// Copy configuration file for Vale
+		$target_file = getcwd() . '/.vale.ini';
+		$template_file = realpath( __DIR__ . '/../../templates/docslint/.vale.ini' );
+
+		if ( file_exists( $target_file ) ) {
+			$output->writeln( '<error>Documentation linter configurastion file already exists at <root>/.vale.ini, not overwriting.</error>' );
+		} else {
+
+			$base_command = sprintf( 'cp "%s" "%s" &> /dev/null', $template_file, $target_file );
+			passthru( $base_command, $return_var );
+
+			if ( $return_var ) {
+				$output->writeln( '<error>Could not create documents linter configuration file, exiting.</error>' );
+
+				return 1;
+			}
+		}
+
+		$output->writeln( '<info>Files have been copied to the root of your project: .markdownlint, .markdownlint-cli2.yml, styles, and .vale.ini.</info>' );
+		$output->writeln( '<info>Feel free to edit the generated config files to install Style guides or configuree as needed.</info>' );
+
+		return 0;
+	}
+
 
 	/**
 	 * Run the passed command on either the local-server or local-chassis environment.
