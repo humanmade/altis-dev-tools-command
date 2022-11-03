@@ -31,6 +31,7 @@ class Command extends BaseCommand {
 			new InputOption( 'output', 'o', InputArgument::OPTIONAL, 'Use a custom path for output folder.', '' ),
 			new InputOption( 'browser', 'b', InputArgument::OPTIONAL, 'Run a headless Chrome browser for acceptance tests, use "chrome", or "firefox"', 'chrome' ),
 			new InputOption( 'all', 'a', InputOption::VALUE_NONE, 'Run all suites even if one fails.' ),
+			new InputOption( 'lint-path', 'l', InputArgument::OPTIONAL, 'Path to module to be linted.' ),
 			new InputArgument( 'options', InputArgument::IS_ARRAY ),
 		] );
 		$this->setHelp(
@@ -54,6 +55,13 @@ To run Codeception commands:
 To Bootstrap configuration files:
     bootstrap <config> [--] [options]
                                 <config> is the type of config to bootstrap, eg: codespaces | lintdocs
+
+To lint the Markdown documentation files:
+	lintdocs --lint-path|-l <path-to-module> markdown|style
+		Use --lint-path to specify the relative path to the module to lint. The command will look for *.md files in 'docs', 'user-docs', and 'other-docs' sub-folders
+		Use 'markdown' to run markdown lint on the format of your markdown files.
+		Use 'style' to run the Vale writing style analyser and spellcheck.
+
 EOT
 		);
 	}
@@ -74,6 +82,8 @@ EOT
 				return $this->codecept( $input, $output );
 			case 'bootstrap':
 				return $this->bootstrap( $input, $output );
+			case 'lintdocs':
+				return $this->lintdocs( $input, $output );
 
 			default:
 				throw new CommandNotFoundException( sprintf( 'Subcommand "%s" is not defined.', $subcommand ) );
@@ -515,94 +525,6 @@ EOL;
 
 		return 0;
 	}
-
-	/**
-	 * Bootstraps Docs linter configuration files.
-	 *
-	 * @param InputInterface $input
-	 * @param OutputInterface $output
-	 *
-	 * @return int
-	 */
-	protected function bootstrap_lintdocs( InputInterface $input, OutputInterface $output ) : int {
-
-		// Copy configuration files for Markdownlint
-		$target_folder = getcwd() . '/.markdownlint';
-		$template_folder = realpath( __DIR__ . '/../../templates/docslint/.markdownlint' );
-
-		if ( file_exists( $target_folder ) ) {
-			$output->writeln( '<error>Markdownlint configuration folder already exists at <root>/.markdownlint, not overwriting.</error>' );
-		} else {
-
-			$base_command = sprintf( 'cp -r "%s" "%s" &> /dev/null', $template_folder, $target_folder );
-			passthru( $base_command, $return_var );
-
-			if ( $return_var ) {
-				$output->writeln( '<error>Could not create markdownlint configuration folder, exiting.</error>' );
-
-				return 1;
-			}
-		}
-
-		$target_file = getcwd() . '/.markdownlint-cli2.yml';
-		$template_file = realpath( __DIR__ . '/../../templates/docslint/.markdownlint-cli2.yml' );
-
-		if ( file_exists( $target_file ) ) {
-			$output->writeln( '<error>Markdownlint configuration file already exists at <root>/.markdownlint-cli2.yml, not overwriting.</error>' );
-		} else {
-
-			$base_command = sprintf( 'cp "%s" "%s" &> /dev/null', $template_file, $target_file );
-			passthru( $base_command, $return_var );
-
-			if ( $return_var ) {
-				$output->writeln( '<error>Could not create markdownlint configuration file, exiting.</error>' );
-
-				return 1;
-			}
-		}
-
-		// Copy styles folder for Vale
-		$target_folder = getcwd() . '/styles';
-		$template_folder = realpath( __DIR__ . '/../../templates/docslint/styles' );
-
-		if ( file_exists( $target_folder ) ) {
-			$output->writeln( '<error>Documentation linter Style folder already exists at <root>/styles, not overwriting.</error>' );
-		} else {
-
-			$base_command = sprintf( 'cp -r "%s" "%s" &> /dev/null', $template_folder, $target_folder );
-			passthru( $base_command, $return_var );
-
-			if ( $return_var ) {
-				$output->writeln( '<error>Could not create documents linter styles folder, exiting.</error>' );
-
-				return 1;
-			}
-		}
-
-		// Copy configuration file for Vale
-		$target_file = getcwd() . '/.vale.ini';
-		$template_file = realpath( __DIR__ . '/../../templates/docslint/.vale.ini' );
-
-		if ( file_exists( $target_file ) ) {
-			$output->writeln( '<error>Documentation linter configurastion file already exists at <root>/.vale.ini, not overwriting.</error>' );
-		} else {
-
-			$base_command = sprintf( 'cp "%s" "%s" &> /dev/null', $template_file, $target_file );
-			passthru( $base_command, $return_var );
-
-			if ( $return_var ) {
-				$output->writeln( '<error>Could not create documents linter configuration file, exiting.</error>' );
-
-				return 1;
-			}
-		}
-
-		$output->writeln( '<info>Files have been copied to the root of your project: .markdownlint, .markdownlint-cli2.yml, styles, and .vale.ini.</info>' );
-		$output->writeln( '<info>Feel free to edit the generated config files to install Style guides or configuree as needed.</info>' );
-
-		return 0;
-	}
-
 
 	/**
 	 * Run the passed command on either the local-server or local-chassis environment.
@@ -1145,5 +1067,207 @@ EOL;
 		}
 		return $merged;
 	}
+
+	/**
+	 * Bootstraps Docs linter configuration files.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function bootstrap_lintdocs( InputInterface $input, OutputInterface $output ) : int {
+
+		// Copy configuration file for Markdownlint
+		$target_file = getcwd() . '/.markdownlint.jsonc';
+		$template_file = realpath( __DIR__ . '/../../templates/docslint/.markdownlint.jsonc' );
+
+		if ( file_exists( $target_file ) ) {
+			$output->writeln( '<error>Markdownlint configuration file already exists at <root>/.markdownlint-cli2.yml, not overwriting.</error>' );
+		} else {
+
+			$base_command = sprintf( 'cp "%s" "%s" &> /dev/null', $template_file, $target_file );
+			passthru( $base_command, $return_var );
+
+			if ( $return_var ) {
+				$output->writeln( '<error>Could not create markdownlint configuration file, exiting.</error>' );
+
+				return 1;
+			}
+		}
+
+		// Copy styles folder for Vale
+		$target_folder = getcwd() . '/styles';
+		$template_folder = realpath( __DIR__ . '/../../templates/docslint/styles' );
+
+		if ( file_exists( $target_folder ) ) {
+			$output->writeln( '<error>Documentation linter Style folder already exists at <root>/styles, not overwriting.</error>' );
+		} else {
+
+			$base_command = sprintf( 'cp -r "%s" "%s" &> /dev/null', $template_folder, $target_folder );
+			passthru( $base_command, $return_var );
+
+			if ( $return_var ) {
+				$output->writeln( '<error>Could not create documents linter styles folder, exiting.</error>' );
+
+				return 1;
+			}
+		}
+
+		// Copy configuration file for Vale
+		$target_file = getcwd() . '/.vale.ini';
+		$template_file = realpath( __DIR__ . '/../../templates/docslint/.vale.ini' );
+
+		if ( file_exists( $target_file ) ) {
+			$output->writeln( '<error>Documentation linter configuration file already exists at <root>/.vale.ini, not overwriting.</error>' );
+		} else {
+
+			$base_command = sprintf( 'cp "%s" "%s" &> /dev/null', $template_file, $target_file );
+			passthru( $base_command, $return_var );
+
+			if ( $return_var ) {
+				$output->writeln( '<error>Could not create documents linter configuration file, exiting.</error>' );
+
+				return 1;
+			}
+		}
+
+		$output->writeln( '<info>Files have been copied to the root of your project: .markdownlint.jasonc, styles/, and .vale.ini.</info>' );
+		$output->writeln( '<info>Feel free to edit the generated config files to install Style guides or configure as needed.</info>' );
+
+		return 0;
+	}
+
+
+
+	/**
+	 * Runs Documentation Linting with default config by default.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 * @return int
+	 */
+	protected function lintdocs( InputInterface $input, OutputInterface $output ) {
+		$subcommands = [ 'markdown', 'style' ];
+		$options = $input->getArgument( 'options' );
+		$subsubcommand = $options[0] ?? null;
+
+		$lint_path = rtrim( $input->getOption( 'lint-path' ), '\\/' );
+
+		// debug
+		$output->writeln( "Options are\n" . var_export($options, true)  );
+		$output->writeln( "Path is\n" . var_export($lint_path, true)  );
+
+		if ( ! in_array( $subsubcommand, $subcommands, true ) ) {
+			$output->writeln( sprintf( 'Available sub commands are: %s.', implode( ', ', $subcommands ) ) );
+			return 1;
+		}
+
+		// Check path exists
+		if ( ! file_exists( $lint_path ) ) {
+			$output->writeln( sprintf( '<error>Docslint cannot find the path you specified "%s", exiting.</error>', $lint_path ) );
+			return 1;
+		}
+
+		call_user_func( [ $this, 'lintdocs_' . $subsubcommand ], $input, $output );
+
+		return 0;
+	}
+
+	/**
+	 * Runs the markdown linter .
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function lintdocs_markdown( InputInterface $input, OutputInterface $output ) : int {
+		$options   = $input->getArgument( 'options' );
+		$lint_path = rtrim( $input->getOption( 'lint-path' ), '\\/' );
+
+		$options = $input->getArgument( 'options' );
+
+		$base_command = sprintf(
+			'docker run ' .
+			'--rm ' .
+			'-v %s:/workdir ' .
+			'davidanson/markdownlint-cli2 ' .
+			'"%s/docs/**/*.md" ' .
+			'"%s/user-docs/**/*.md" ' .
+			'"%s/other-docs/**/*.md" ' .
+			'"#node_modules" ' .
+			'"#.github" ',
+			$this->get_root_dir(),
+			$lint_path,
+			$lint_path,
+			$lint_path
+		);
+
+		$output->writeln( sprintf( 'base_command: %s.', $base_command ) );
+
+		$return_var = 0;
+
+		passthru( $base_command, $return_var );
+
+		return $return_var;
+	}
+
+	/**
+	 * Runs the Vale style checker linter .
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function lintdocs_style( InputInterface $input, OutputInterface $output ) : int {
+		$options   = $input->getArgument( 'options' );
+		$lint_path = rtrim( $input->getOption( 'lint-path' ), '\\/' );
+
+		$options = $input->getArgument( 'options' );
+
+		// Need to check which docs folders exist as Vale does not like missing folders.
+		$docs_paths = [
+			'/docs',
+			'/user-docs',
+			'/other-docs',
+		];
+		$docs_path_list = [];
+		foreach( $docs_paths as $docs_path) {
+			$target_path = getcwd() . '/' . $lint_path . $docs_path;
+			if ( file_exists( $target_path ) ) {
+				$docs_path_list[] = $lint_path . $docs_path;
+			}
+		}
+
+		if ( empty( $docs_path_list)) {
+			$output->writeln( sprintf('<error>No docs folders found in supplied path %s, exiting.</error>', $lint_path ) );
+			return 1;
+		}
+
+		$docs_path = implode( ' ', $docs_path_list);
+		$base_command = sprintf(
+			'docker run ' .
+			'--platform linux/amd64 ' .
+			'--rm -v %s/styles:/styles ' .
+			'--rm -v %s:/workdir ' .
+			' -w /workdir ' .
+			'jdkato/vale --config=/workdir/.vale.ini ' .
+			'%s ',
+			$this->get_root_dir(),
+			$this->get_root_dir(),
+			$docs_path
+		);
+
+		$output->writeln( sprintf( 'base_command: %s.', $base_command ) );
+
+		$return_var = 0;
+
+		passthru( $base_command, $return_var );
+
+		return $return_var;
+	}
+
 
 }
