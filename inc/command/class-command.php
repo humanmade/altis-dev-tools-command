@@ -1154,10 +1154,6 @@ EOL;
 
 		$lint_path = rtrim( $input->getOption( 'lint-path' ), '\\/' );
 
-		// debug
-		$output->writeln( "Options are\n" . var_export($options, true)  );
-		$output->writeln( "Path is\n" . var_export($lint_path, true)  );
-
 		if ( ! in_array( $subsubcommand, $subcommands, true ) ) {
 			$output->writeln( sprintf( 'Available sub commands are: %s.', implode( ', ', $subcommands ) ) );
 			return 1;
@@ -1185,26 +1181,35 @@ EOL;
 	protected function lintdocs_markdown( InputInterface $input, OutputInterface $output ) : int {
 		$options   = $input->getArgument( 'options' );
 		$lint_path = rtrim( $input->getOption( 'lint-path' ), '\\/' );
-
 		$options = $input->getArgument( 'options' );
+
+		// Manually add in the expected subdirectories.
+		$docs_path_list = [];
+		foreach( $this->get_expected_docs_paths() as $docs_path) {
+			$target_path = getcwd() . '/' . $lint_path . $docs_path;
+			if ( file_exists( $target_path ) ) {
+				$docs_path_list[] = $lint_path . $docs_path . '/**/*.md';
+			}
+		}
+
+		if ( empty( $docs_path_list)) {
+			$output->writeln( sprintf('<error>No docs folders found in supplied path %s, exiting.</error>', $lint_path ) );
+			return 1;
+		}
+
+		$docs_path = implode( '" "', $docs_path_list);
 
 		$base_command = sprintf(
 			'docker run ' .
 			'--rm ' .
 			'-v %s:/workdir ' .
 			'davidanson/markdownlint-cli2 ' .
-			'"%s/docs/**/*.md" ' .
-			'"%s/user-docs/**/*.md" ' .
-			'"%s/other-docs/**/*.md" ' .
-			'"#node_modules" ' .
-			'"#.github" ',
+			'"%s" ',
 			$this->get_root_dir(),
-			$lint_path,
-			$lint_path,
-			$lint_path
+			$docs_path
 		);
 
-		$output->writeln( sprintf( 'base_command: %s.', $base_command ) );
+		$output->writeln( sprintf( 'executing: %s.', $base_command ) );
 
 		$return_var = 0;
 
@@ -1224,17 +1229,11 @@ EOL;
 	protected function lintdocs_style( InputInterface $input, OutputInterface $output ) : int {
 		$options   = $input->getArgument( 'options' );
 		$lint_path = rtrim( $input->getOption( 'lint-path' ), '\\/' );
-
 		$options = $input->getArgument( 'options' );
 
 		// Need to check which docs folders exist as Vale does not like missing folders.
-		$docs_paths = [
-			'/docs',
-			'/user-docs',
-			'/other-docs',
-		];
 		$docs_path_list = [];
-		foreach( $docs_paths as $docs_path) {
+		foreach( $this->get_expected_docs_paths() as $docs_path) {
 			$target_path = getcwd() . '/' . $lint_path . $docs_path;
 			if ( file_exists( $target_path ) ) {
 				$docs_path_list[] = $lint_path . $docs_path;
@@ -1260,7 +1259,7 @@ EOL;
 			$docs_path
 		);
 
-		$output->writeln( sprintf( 'base_command: %s.', $base_command ) );
+		$output->writeln( sprintf( 'executing: %s.', $base_command ) );
 
 		$return_var = 0;
 
@@ -1269,5 +1268,17 @@ EOL;
 		return $return_var;
 	}
 
+	/**
+	 * Return a list of the document directories to lint.
+	 * 
+	 * @return string[]
+	 */
+	protected function get_expected_docs_paths() : array {
+		return [
+			'/docs',
+			'/user-docs',
+			'/other-docs',
+		];
+	}
 
 }
