@@ -57,8 +57,9 @@ To Bootstrap configuration files:
                                 <config> is the type of config to bootstrap, eg: codespaces | lintdocs
 
 To lint the Markdown documentation files:
-	lintdocs --lint-path|-l <path-to-module> markdown|style
+	lintdocs --lint-path|-l <path-to-module> files|markdown|style
 		Use --lint-path to specify the relative path to the module to lint. The command will look for *.md files in 'docs', 'user-docs', and 'other-docs' sub-folders
+		Use 'files' to check for the required files.
 		Use 'markdown' to run markdown lint on the format of your markdown files.
 		Use 'style' to run the Vale writing style analyser and spellcheck.
 
@@ -1148,11 +1149,12 @@ EOL;
 	 * @return int
 	 */
 	protected function lintdocs( InputInterface $input, OutputInterface $output ) {
-		$subcommands = [ 'markdown', 'style' ];
+		$subcommands = [ 'files', 'markdown', 'style' ];
 		$options = $input->getArgument( 'options' );
 		$subsubcommand = $options[0] ?? null;
 
-		$lint_path = rtrim( $input->getOption( 'lint-path' ), '\\/' );
+		$lint_path = $input->getOption( 'lint-path' ) ?? '.';
+		$lint_path = rtrim( $lint_path, '\\/' );
 
 		if ( ! in_array( $subsubcommand, $subcommands, true ) ) {
 			$output->writeln( sprintf( 'Available sub commands are: %s.', implode( ', ', $subcommands ) ) );
@@ -1168,6 +1170,43 @@ EOL;
 		call_user_func( [ $this, 'lintdocs_' . $subsubcommand ], $input, $output );
 
 		return 0;
+	}
+
+	/**
+	 * Runs the markdown files checker.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function lintdocs_files( InputInterface $input, OutputInterface $output ) : int {
+		$options   = $input->getArgument( 'options' );
+		$lint_path = rtrim( $input->getOption( 'lint-path' ), '\\/' );
+		$options = $input->getArgument( 'options' );
+
+		if ( empty( $lint_path)) {
+			$output->writeln( sprintf('<error>Folder not found %s, exiting.</error>', $lint_path ) );
+			return 1;
+		}
+
+		$base_command = sprintf(
+			'docker run ' .
+			'--rm ' .
+			'-v %s:/workdir ' .
+			'node:16-alpine sh -c ' .
+			'"node /workdir/vendor/altis/dev-tools-command/templates/docslint/hm-lint-markdown.js %s" ',
+			$this->get_root_dir(),
+			$lint_path
+		);
+
+		$output->writeln( sprintf( 'executing: %s.', $base_command ) );
+
+		$return_var = 0;
+
+		passthru( $base_command, $return_var );
+
+		return $return_var;
 	}
 
 	/**
@@ -1270,7 +1309,7 @@ EOL;
 
 	/**
 	 * Return a list of the document directories to lint.
-	 * 
+	 *
 	 * @return string[]
 	 */
 	protected function get_expected_docs_paths() : array {
