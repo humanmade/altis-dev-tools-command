@@ -25,12 +25,13 @@ class Command extends BaseCommand {
 		$this->setName( 'dev-tools' );
 		$this->setDescription( 'Developer tools' );
 		$this->setDefinition( [
-			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit | codecept | bootstrap' ),
+			new InputArgument( 'subcommand', InputArgument::REQUIRED, 'phpunit | codecept | bootstrap | lintdocs' ),
 			new InputOption( 'chassis', null, null, 'Run commands in the Local Chassis environment' ),
 			new InputOption( 'path', 'p', InputArgument::OPTIONAL, 'Use a custom path for tests folder.', 'tests' ),
 			new InputOption( 'output', 'o', InputArgument::OPTIONAL, 'Use a custom path for output folder.', '' ),
 			new InputOption( 'browser', 'b', InputArgument::OPTIONAL, 'Run a headless Chrome browser for acceptance tests, use "chrome", or "firefox"', 'chrome' ),
 			new InputOption( 'all', 'a', InputOption::VALUE_NONE, 'Run all suites even if one fails.' ),
+			new InputOption( 'lint-path', 'l', InputArgument::OPTIONAL, 'Path to module to be linted.' ),
 			new InputArgument( 'options', InputArgument::IS_ARRAY ),
 		] );
 		$this->setHelp(
@@ -53,7 +54,16 @@ To run Codeception commands:
 
 To Bootstrap configuration files:
     bootstrap <config> [--] [options]
-                                <config> is the type of config to bootstrap, eg: codespaces
+                                <config> is the type of config to bootstrap, eg: codespaces | lintdocs
+
+To lint the Markdown documentation files:
+	lintdocs --lint-path|-l <path-to-module> files|markdown|style|all
+		Use --lint-path to specify the relative path to the module to lint. The command will look for *.md files in 'docs', 'user-docs', and 'other-docs' sub-folders
+		Use 'files' to check for the required files.
+		Use 'markdown' to run markdown lint on the format of your markdown files.
+		Use 'style' to run the Vale writing style analyser and spellcheck.
+		Use 'all' to run all the documentation checks.
+
 EOT
 		);
 	}
@@ -63,6 +73,7 @@ EOT
 	 *
 	 * @param InputInterface $input
 	 * @param OutputInterface $output
+	 *
 	 * @return int Status code to return
 	 */
 	protected function execute( InputInterface $input, OutputInterface $output ) {
@@ -74,6 +85,8 @@ EOT
 				return $this->codecept( $input, $output );
 			case 'bootstrap':
 				return $this->bootstrap( $input, $output );
+			case 'lintdocs':
+				return $this->lintdocs( $input, $output );
 
 			default:
 				throw new CommandNotFoundException( sprintf( 'Subcommand "%s" is not defined.', $subcommand ) );
@@ -85,6 +98,7 @@ EOT
 	 *
 	 * @param InputInterface $input
 	 * @param OutputInterface $output
+	 *
 	 * @return int
 	 */
 	protected function phpunit( InputInterface $input, OutputInterface $output ) {
@@ -216,6 +230,7 @@ EOT
 	 *
 	 * @param InputInterface $input
 	 * @param OutputInterface $output
+	 *
 	 * @return int
 	 */
 	protected function codecept( InputInterface $input, OutputInterface $output ) {
@@ -281,9 +296,9 @@ EOT
 						'dump' => '%TEST_SITE_DB_DUMP%',
 						'populator' => sprintf(
 							'export DB_NAME=%1$s && ' .
-								'wp core multisite-install --quiet --url=%2$s --base=/ --title=Testing ' .
-								'--admin_user=admin --admin_password=password --admin_email=admin@%3$s ' .
-								'--skip-email --skip-config && wp altis migrate --url=%2$s',
+							'wp core multisite-install --quiet --url=%2$s --base=/ --title=Testing ' .
+							'--admin_user=admin --admin_password=password --admin_email=admin@%3$s ' .
+							'--skip-email --skip-config && wp altis migrate --url=%2$s',
 							'%TEST_SITE_DB_NAME%',
 							'%TEST_SITE_WP_URL%',
 							'%TEST_SITE_WP_DOMAIN%'
@@ -460,7 +475,7 @@ EOL;
 	 * @return int
 	 */
 	protected function bootstrap( InputInterface $input, OutputInterface $output ) : int {
-		$configs = [ 'codespaces' ];
+		$configs = [ 'codespaces', 'lintdocs' ];
 
 		$options = $input->getArgument( 'options' );
 		$subsubcommand = $options[0] ?? null;
@@ -475,6 +490,8 @@ EOL;
 
 		if ( ! in_array( $subsubcommand, $configs, true ) ) {
 			$output->writeln( sprintf( '<error>Could not find the target configuration set generator for "%s".</error>', $subsubcommand ) );
+			$output->writeln( sprintf( 'Available configuration sets are: %s.', implode( ', ', $configs ) ) );
+
 			return 1;
 		}
 
@@ -497,6 +514,7 @@ EOL;
 
 		if ( file_exists( $target_folder ) ) {
 			$output->writeln( '<error>Codespaces devcontainer configuration exists already at <root>/.devcontainer, aborting.</error>' );
+
 			return 1;
 		}
 
@@ -505,6 +523,7 @@ EOL;
 
 		if ( $return_var ) {
 			$output->writeln( '<error>Could not generate Codespaces devcontainer configuration, aborting.</error>' );
+
 			return 1;
 		}
 
@@ -522,6 +541,7 @@ EOL;
 	 * @param OutputInterface $output
 	 * @param string $command The command to run.
 	 * @param array $options Any required options to pass to the command.
+	 *
 	 * @return int
 	 */
 	protected function run_command( InputInterface $input, OutputInterface $output, string $command, array $options = [] ) {
@@ -641,7 +661,7 @@ EOL;
 		$temp_run_file_path = $this->get_root_dir() . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . '.test-running';
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
 		file_put_contents( $temp_run_file_path, 'true' );
-		register_shutdown_function( function() use ( $temp_run_file_path ) {
+		register_shutdown_function( function () use ( $temp_run_file_path ) {
 			unlink( $temp_run_file_path );
 		} );
 
@@ -661,7 +681,7 @@ EOL;
 				$has_created_db = true;
 
 				// Remove the db on shutdown.
-				register_shutdown_function( function() use ( $input, $output ) {
+				register_shutdown_function( function () use ( $input, $output ) {
 					$output->write( '<info>Removing test databases..</info>', true, $output::VERBOSITY_NORMAL );
 					$this->delete_test_db( $input, $output );
 				} );
@@ -674,7 +694,7 @@ EOL;
 				$has_created_browser = true;
 
 				// Stop the container on shutdown.
-				register_shutdown_function( function() use ( $input, $output ) {
+				register_shutdown_function( function () use ( $input, $output ) {
 					$output->write( '<info>Removing headless browser container..</info>', true, $output::VERBOSITY_NORMAL );
 					$this->stop_browser_container( $input, $output );
 				} );
@@ -709,6 +729,7 @@ EOL;
 	protected function codecept_passthru( InputInterface $input, OutputInterface $output ) : int {
 		$options = $input->getArgument( 'options' );
 		$output->write( '<info>Running Codeception..</info>', true, $output::VERBOSITY_NORMAL );
+
 		return $this->run_command( $input, $output, 'vendor/bin/codecept', $options );
 	}
 
@@ -894,12 +915,12 @@ EOL;
 		// This exports ports 4444 for the Selenium hub web portal, and 7900 for the noVNC server.
 		$base_command = sprintf(
 			'docker run ' .
-				'-d ' .
-				'-e COLUMNS=%1%d -e LINES=%2$d ' .
-				'--network=host ' .
-				'--name=%3$s_selenium ' .
-				'--shm-size="2g" ' .
-				'seleniarm/standalone-%4$s:4.1.4-20220429',
+			'-d ' .
+			'-e COLUMNS=%1%d -e LINES=%2$d ' .
+			'--network=host ' .
+			'--name=%3$s_selenium ' .
+			'--shm-size="2g" ' .
+			'seleniarm/standalone-%4$s:4.1.4-20220429',
 			$columns,
 			$lines,
 			$this->get_project_subdomain(),
@@ -934,6 +955,7 @@ EOL;
 	 * Return suite files within a tests folder.
 	 *
 	 * @param string $folder Tests folder to scan.
+	 *
 	 * @return array
 	 */
 	protected function get_test_suites( $folder ) : array {
@@ -981,6 +1003,7 @@ EOL;
 		// Then add the current test suite name.
 		$index = array_search( 'run', $options, true );
 		array_splice( $options, $index + 1, 0, [ $suite_name ] );
+
 		return $options;
 	}
 
@@ -997,6 +1020,7 @@ EOL;
 	 * Get a module config from composer.json.
 	 *
 	 * @param string $module The module to get the config for.
+	 *
 	 * @return array
 	 */
 	protected function get_config( $module = 'dev-tools' ) : array {
@@ -1011,6 +1035,7 @@ EOL;
 	 * Check if a given path is valid for PHPUnit.
 	 *
 	 * @param string $path The filepath to check.
+	 *
 	 * @return boolean
 	 */
 	protected function is_valid_test_path( string $path ) : bool {
@@ -1024,6 +1049,7 @@ EOL;
 		if ( is_file( $full_path ) ) {
 			return in_array( pathinfo( $full_path, PATHINFO_EXTENSION ), [ 'php', 'inc' ], true );
 		}
+
 		return is_dir( $full_path );
 	}
 
@@ -1033,6 +1059,7 @@ EOL;
 	 *
 	 * @param array $config The default config array.
 	 * @param array $overrides The config to merge in.
+	 *
 	 * @return array
 	 */
 	protected function merge_config( array $config, array $overrides ) : array {
@@ -1054,7 +1081,270 @@ EOL;
 				break;
 			}
 		}
+
 		return $merged;
+	}
+
+	/**
+	 * Bootstraps Docs linter configuration files.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function bootstrap_lintdocs( InputInterface $input, OutputInterface $output ) : int {
+
+		// Copy configuration file for Markdownlint
+		$target_file = getcwd() . '/.markdownlint.jsonc';
+		$template_file = realpath( __DIR__ . '/../../templates/docslint/.markdownlint.jsonc' );
+
+		if ( file_exists( $target_file ) ) {
+			$output->writeln( '<error>Markdownlint configuration file already exists at <root>/.markdownlint-cli2.yml, not overwriting.</error>' );
+		} else {
+
+			$base_command = sprintf( 'cp "%s" "%s" &> /dev/null', $template_file, $target_file );
+			passthru( $base_command, $return_var );
+
+			if ( $return_var ) {
+				$output->writeln( '<error>Could not create markdownlint configuration file, exiting.</error>' );
+
+				return 1;
+			}
+		}
+
+		// Copy styles folder for Vale
+		$target_folder = getcwd() . '/styles';
+		$template_folder = realpath( __DIR__ . '/../../templates/docslint/styles' );
+
+		if ( file_exists( $target_folder ) ) {
+			$output->writeln( '<error>Documentation linter Style folder already exists at <root>/styles, not overwriting.</error>' );
+		} else {
+
+			$base_command = sprintf( 'cp -r "%s" "%s" &> /dev/null', $template_folder, $target_folder );
+			passthru( $base_command, $return_var );
+
+			if ( $return_var ) {
+				$output->writeln( '<error>Could not create documents linter styles folder, exiting.</error>' );
+
+				return 1;
+			}
+		}
+
+		// Copy configuration file for Vale
+		$target_file = getcwd() . '/.vale.ini';
+		$template_file = realpath( __DIR__ . '/../../templates/docslint/.vale.ini' );
+
+		if ( file_exists( $target_file ) ) {
+			$output->writeln( '<error>Documentation linter configuration file already exists at <root>/.vale.ini, not overwriting.</error>' );
+		} else {
+
+			$base_command = sprintf( 'cp "%s" "%s" &> /dev/null', $template_file, $target_file );
+			passthru( $base_command, $return_var );
+
+			if ( $return_var ) {
+				$output->writeln( '<error>Could not create documents linter configuration file, exiting.</error>' );
+
+				return 1;
+			}
+		}
+
+		$output->writeln( '<info>Files have been copied to the root of your project: .markdownlint.jasonc, styles/, and .vale.ini.</info>' );
+		$output->writeln( '<info>Feel free to edit the generated config files to install Style guides or configure as needed.</info>' );
+
+		return 0;
+	}
+
+
+	/**
+	 * Runs Documentation Linting with default config by default.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function lintdocs( InputInterface $input, OutputInterface $output ) {
+		$subcommands = [ 'files', 'markdown', 'style' ];
+		$options = $input->getArgument( 'options' );
+		$subsubcommand = $options[0] ?? null;
+
+		$lint_path = $input->getOption( 'lint-path' ) ?? '.';
+		$lint_path = rtrim( $lint_path, '\\/' );
+
+		if ( ! in_array( $subsubcommand, $subcommands, true ) && ( $subsubcommand !== 'all' ) ) {
+			$output->writeln( sprintf( 'Available sub commands are: %s.', implode( ', ', $subcommands ) ) );
+
+			return 1;
+		}
+
+		// Check path exists
+		if ( ! file_exists( $lint_path ) ) {
+			$output->writeln( sprintf( '<error>Docslint cannot find the path you specified "%s", exiting.</error>', $lint_path ) );
+
+			return 1;
+		}
+
+		if ( $subsubcommand === 'all' ) {
+			foreach ( $subcommands as $subsubcommand ) {
+				call_user_func( [ $this, 'lintdocs_' . $subsubcommand ], $input, $output );
+			}
+		} else {
+			call_user_func( [ $this, 'lintdocs_' . $subsubcommand ], $input, $output );
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Runs the markdown files checker.
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function lintdocs_files( InputInterface $input, OutputInterface $output ) : int {
+		$options = $input->getArgument( 'options' );
+		$lint_path = rtrim( $input->getOption( 'lint-path' ), '\\/' );
+		$options = $input->getArgument( 'options' );
+
+		if ( empty( $lint_path ) ) {
+			$output->writeln( sprintf( '<error>Folder not found %s, exiting.</error>', $lint_path ) );
+
+			return 1;
+		}
+
+		$base_command = sprintf(
+			'docker run ' .
+			'--rm ' .
+			'-v %s:/workdir ' .
+			'node:16-alpine sh -c ' .
+			'"node /workdir/vendor/altis/dev-tools-command/templates/docslint/hm-lint-markdown.js /workdir/%s" ',
+			$this->get_root_dir(),
+			$lint_path
+		);
+
+		$output->writeln( sprintf( 'executing: %s.', $base_command ) );
+
+		$return_var = 0;
+
+		passthru( $base_command, $return_var );
+
+		return $return_var;
+	}
+
+	/**
+	 * Runs the markdown linter .
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function lintdocs_markdown( InputInterface $input, OutputInterface $output ) : int {
+		$options = $input->getArgument( 'options' );
+		$lint_path = rtrim( $input->getOption( 'lint-path' ), '\\/' );
+		$options = $input->getArgument( 'options' );
+
+		// Manually add in the expected subdirectories.
+		$docs_path_list = [];
+		foreach ( $this->get_expected_docs_paths() as $docs_path ) {
+			$target_path = getcwd() . '/' . $lint_path . $docs_path;
+			if ( file_exists( $target_path ) ) {
+				$docs_path_list[] = $lint_path . $docs_path . '/**/*.md';
+			}
+		}
+
+		if ( empty( $docs_path_list ) ) {
+			$output->writeln( sprintf( '<error>No docs folders found in supplied path %s, exiting.</error>', $lint_path ) );
+
+			return 1;
+		}
+
+		$docs_path = implode( '" "', $docs_path_list );
+
+		$base_command = sprintf(
+			'docker run ' .
+			'--rm ' .
+			'-v %s:/workdir ' .
+			'davidanson/markdownlint-cli2 ' .
+			'"%s" ',
+			$this->get_root_dir(),
+			$docs_path
+		);
+
+		$output->writeln( sprintf( 'executing: %s.', $base_command ) );
+
+		$return_var = 0;
+
+		passthru( $base_command, $return_var );
+
+		return $return_var;
+	}
+
+	/**
+	 * Runs the Vale style checker linter .
+	 *
+	 * @param InputInterface $input
+	 * @param OutputInterface $output
+	 *
+	 * @return int
+	 */
+	protected function lintdocs_style( InputInterface $input, OutputInterface $output ) : int {
+		$options = $input->getArgument( 'options' );
+		$lint_path = rtrim( $input->getOption( 'lint-path' ), '\\/' );
+		$options = $input->getArgument( 'options' );
+
+		// Need to check which docs folders exist as Vale does not like missing folders.
+		$docs_path_list = [];
+		foreach ( $this->get_expected_docs_paths() as $docs_path ) {
+			$target_path = getcwd() . '/' . $lint_path . $docs_path;
+			if ( file_exists( $target_path ) ) {
+				$docs_path_list[] = $lint_path . $docs_path;
+			}
+		}
+
+		if ( empty( $docs_path_list ) ) {
+			$output->writeln( sprintf( '<error>No docs folders found in supplied path %s, exiting.</error>', $lint_path ) );
+
+			return 1;
+		}
+
+		$docs_path = implode( ' ', $docs_path_list );
+		$base_command = sprintf(
+			'docker run ' .
+			'--platform linux/amd64 ' .
+			'--rm -v %s/styles:/styles ' .
+			'--rm -v %s:/workdir ' .
+			' -w /workdir ' .
+			'jdkato/vale --config=/workdir/.vale.ini ' .
+			'%s ',
+			$this->get_root_dir(),
+			$this->get_root_dir(),
+			$docs_path
+		);
+
+		$output->writeln( sprintf( 'executing: %s.', $base_command ) );
+
+		$return_var = 0;
+
+		passthru( $base_command, $return_var );
+
+		return $return_var;
+	}
+
+	/**
+	 * Return a list of the document directories to lint.
+	 *
+	 * @return string[]
+	 */
+	protected function get_expected_docs_paths() : array {
+		return [
+			'/docs',
+			'/user-docs',
+			'/other-docs',
+		];
 	}
 
 }
