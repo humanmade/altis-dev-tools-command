@@ -1220,7 +1220,7 @@ EOL;
 			'--rm ' .
 			'-v %s:/workdir ' .
 			'node:16-alpine sh -c ' .
-			'"node /workdir/vendor/altis/dev-tools-command/templates/docslint/hm-lint-markdown.js %s" ',
+			'"node /workdir/vendor/altis/dev-tools-command/templates/docslint/hm-lint-markdown.js /workdir/%s" ',
 			$this->get_root_dir(),
 			$lint_path
 		);
