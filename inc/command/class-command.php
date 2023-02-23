@@ -313,8 +313,8 @@ EOT
 						'letCron' => true,
 					],
 					'WPCLI' => [
-						'path' => '/usr/src/app',
-						'require' => '/usr/src/app/index.php',
+						'path' => '/usr/src/app/wordpress',
+						'url' => '%TEST_SITE_WP_DOMAIN%',
 					],
 					'WPBrowser' => [
 						'url' => '%TEST_SITE_WP_URL%',
