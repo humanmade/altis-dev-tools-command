@@ -10,7 +10,7 @@ use Composer\Plugin\PluginInterface;
 
 class Plugin implements PluginInterface, Capable, EventSubscriberInterface {
 
-	private Composer $composer;
+	protected Composer $composer;
 
 	public function activate( Composer $composer, IOInterface $io ) {
 		$this->composer = $composer;
