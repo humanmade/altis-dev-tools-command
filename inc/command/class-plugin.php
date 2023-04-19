@@ -101,7 +101,7 @@ class Plugin implements PluginInterface, Capable, EventSubscriberInterface {
 		echo(
 			"\n" .
 			'The file .travis.yml does not match that required by Altis.' . "\n" .
-			'See the file at: ' . esc_textarea( $source ) . '/travis/project.yml' . "\n" .
+			'See the file at: ' . $source . '/travis/project.yml' . "\n" .
 			'For more information follow this guide:' . "\n" .
 			'https://www.altis-dxp.com/resources/docs/dev-tools/continuous-integration/ ' . "\n"
 		);
