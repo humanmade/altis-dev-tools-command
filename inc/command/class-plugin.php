@@ -1,4 +1,9 @@
 <?php
+/**
+ * Altis Dev Tools Command Composer Plugin.
+ *
+ * @package altis/dev-tools-command
+ */
 
 namespace Altis\Dev_Tools\Command;
 
@@ -8,14 +13,33 @@ use Composer\IO\IOInterface;
 use Composer\Plugin\Capable;
 use Composer\Plugin\PluginInterface;
 
+/**
+ * Altis Dev Tools Composer plugin class.
+ */
 class Plugin implements PluginInterface, Capable, EventSubscriberInterface {
 
+	/**
+	 * Composer instance.
+	 *
+	 * @var Composer
+	 */
 	protected Composer $composer;
 
+	/**
+	 *  Activate the plugin.
+	 *
+	 * @param Composer $composer Composer instance.
+	 * @param IOInterface $io IO instance.
+	 */
 	public function activate( Composer $composer, IOInterface $io ) {
 		$this->composer = $composer;
 	}
 
+	/**
+	 * Get the capabilities of this plugin.
+	 *
+	 * @return array
+	 */
 	public function getCapabilities() {
 		return [
 			'Composer\\Plugin\\Capability\\CommandProvider' => __NAMESPACE__ . '\\Command_Provider',
@@ -77,20 +101,26 @@ class Plugin implements PluginInterface, Capable, EventSubscriberInterface {
 		echo(
 			"\n" .
 			'The file .travis.yml does not match that required by Altis.' . "\n" .
-			'See the file at: ' . $source . '/travis/project.yml' . "\n" .
+			'See the file at: ' . esc_textarea( $source ) . '/travis/project.yml' . "\n" .
 			'For more information follow this guide:' . "\n" .
 			'https://www.altis-dxp.com/resources/docs/dev-tools/continuous-integration/ ' . "\n"
 		);
 	}
 
 	/**
-	 * {@inheritDoc}
+	 *  Deactivate the plugin.
+	 *
+	 * @param Composer $composer Composer instance.
+	 * @param IOInterface $io IO instance.
 	 */
 	public function deactivate( Composer $composer, IOInterface $io ) {
 	}
 
 	/**
-	 * {@inheritDoc}
+	 *  Uninstall the plugin.
+	 *
+	 * @param Composer $composer Composer instance.
+	 * @param IOInterface $io IO instance.
 	 */
 	public function uninstall( Composer $composer, IOInterface $io ) {
 	}
