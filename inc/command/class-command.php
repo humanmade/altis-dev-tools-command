@@ -1149,7 +1149,7 @@ EOL;
 			}
 		}
 
-		$output->writeln( '<info>Files have been copied to the root of your project: .markdownlint.jasonc, styles/, and .vale.ini.</info>' );
+		$output->writeln( '<info>Files have been copied to the root of your project: .markdownlint.yml, styles/, and .vale.ini.</info>' );
 		$output->writeln( '<info>Feel free to edit the generated config files to install Style guides or configure as needed.</info>' );
 
 		return 0;
