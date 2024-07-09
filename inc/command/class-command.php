@@ -1096,11 +1096,11 @@ EOL;
 	protected function bootstrap_lintdocs( InputInterface $input, OutputInterface $output ) : int {
 
 		// Copy configuration file for Markdownlint
-		$target_file = getcwd() . '/.markdownlint.jsonc';
-		$template_file = realpath( __DIR__ . '/../../templates/docslint/.markdownlint.jsonc' );
+		$target_file = getcwd() . '/.markdownlint.yaml';
+		$template_file = realpath( __DIR__ . '/../../templates/docslint/markdownlint.yaml' );
 
 		if ( file_exists( $target_file ) ) {
-			$output->writeln( '<error>Markdownlint configuration file already exists at <root>/.markdownlint-cli2.yml, not overwriting.</error>' );
+			$output->writeln( '<error>Markdownlint configuration file already exists at <root>/.markdownlint.yml, not overwriting.</error>' );
 		} else {
 
 			$base_command = sprintf( 'cp "%s" "%s" &> /dev/null', $template_file, $target_file );
@@ -1133,7 +1133,7 @@ EOL;
 
 		// Copy configuration file for Vale
 		$target_file = getcwd() . '/.vale.ini';
-		$template_file = realpath( __DIR__ . '/../../templates/docslint/.vale.ini' );
+		$template_file = realpath( __DIR__ . '/../../templates/docslint/vale.ini' );
 
 		if ( file_exists( $target_file ) ) {
 			$output->writeln( '<error>Documentation linter configuration file already exists at <root>/.vale.ini, not overwriting.</error>' );
@@ -1149,7 +1149,7 @@ EOL;
 			}
 		}
 
-		$output->writeln( '<info>Files have been copied to the root of your project: .markdownlint.jasonc, styles/, and .vale.ini.</info>' );
+		$output->writeln( '<info>Files have been copied to the root of your project: .markdownlint.yml, styles/, and .vale.ini.</info>' );
 		$output->writeln( '<info>Feel free to edit the generated config files to install Style guides or configure as needed.</info>' );
 
 		return 0;
