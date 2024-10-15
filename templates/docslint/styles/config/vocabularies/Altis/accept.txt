@@ -64,6 +64,7 @@ Photoshop
 PhpStorm
 PHPUnit
 [Pp]ingbacks?
+[Pp]laintext
 [Rr]eindex(ing)?
 Rekognition
 [Ss]anitization
