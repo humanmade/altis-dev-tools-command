@@ -385,7 +385,7 @@ EOT
 						'plugins' => [],
 						'activatePlugins' => [],
 						'multisite' => true,
-						'configFile' => 'altis/dev-tools/inc/codeception/config.php',
+						'configFile' => 'vendor/altis/dev-tools/inc/codeception/config.php',
 						'contentFolder' => 'content',
 						'bootstrapActions' => [
 							'bootstrap_codeception_wp',
