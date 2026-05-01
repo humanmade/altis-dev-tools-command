@@ -58,53 +58,59 @@ class Plugin implements PluginInterface, Capable, EventSubscriberInterface {
 	}
 
 	/**
-	 * Install Travis CI configs.
+	 * Install / update the project's GitHub Actions CI workflow.
+	 *
+	 * Copies templates/project-ci.yml from altis/dev-tools to
+	 * .github/workflows/ci.yml in the project root, and re-pins the
+	 * reusable-workflow reference (`altis-ci.yml@<ref>`) to the installed
+	 * dev-tools version. Once the user customises the file (or its hash
+	 * otherwise diverges from the template) the auto re-pinning stops.
+	 *
+	 * Existing .travis.yml files are intentionally left untouched. Travis CI
+	 * remains a supported choice for users who prefer it; from this version
+	 * onwards `composer install` no longer manages the Travis config.
 	 */
 	public function install_files() {
 		$source = $this->composer->getConfig()->get( 'vendor-dir' ) . '/altis/dev-tools';
 		$dest   = dirname( $this->composer->getConfig()->get( 'vendor-dir' ) );
 
-		// Copy default tests file.
-		if ( ! file_exists( $dest . '/.config/travis.yml' ) ) {
-			@mkdir( $dest . '/.config', 0755, true );
-			copy( $source . '/travis/tests.yml', $dest . '/.config/travis.yml' );
-		}
+		$template = $source . '/templates/project-ci.yml';
+		$workflow = $dest . '/.github/workflows/ci.yml';
 
-		// Create .travis.yml if one doesn't exist yet.
-		if ( ! file_exists( $dest . '/.travis.yml' ) ) {
-			copy( $source . '/travis/project.yml', $dest . '/.travis.yml' );
-		}
-
-		// Reset ref.
-		$root_config = file_get_contents( $dest . '/.travis.yml' );
-		$root_config = preg_replace( '#altis\.yml@.*#', 'altis.yml@__ref_replace_me__', $root_config );
-
-		// Check files match.
-		$source_hash = md5( file_get_contents( $source . '/travis/project.yml' ) );
-		$dest_hash = md5( $root_config );
-
-		// If files match then update the ref.
-		if ( $source_hash === $dest_hash ) {
-			// Get dev tools package.
-			$package = $this->composer->getRepositoryManager()->getLocalRepository()->findPackage( 'altis/dev-tools', '*' );
-
-			// Get branch name or tag.
-			$ref = str_replace( 'dev-', '', $package->getPrettyVersion() );
-
-			// Write travis config with new ref.
-			$root_config = str_replace( 'altis.yml@__ref_replace_me__', "altis.yml@{$ref}", $root_config );
-			file_put_contents( $dest . '/.travis.yml', $root_config );
+		// Older altis/dev-tools versions don't ship the template; bail silently.
+		if ( ! file_exists( $template ) ) {
 			return;
 		}
 
-		// Files are mismatched, show a warning.
-		echo(
-			"\n" .
-			'The file .travis.yml does not match that required by Altis.' . "\n" .
-			'See the file at: ' . $source . '/travis/project.yml' . "\n" .
-			'For more information follow this guide:' . "\n" .
-			'https://www.altis-dxp.com/resources/docs/dev-tools/continuous-integration/ ' . "\n"
-		);
+		// Create the workflow file if it doesn't exist yet.
+		if ( ! file_exists( $workflow ) ) {
+			@mkdir( dirname( $workflow ), 0755, true );
+			copy( $template, $workflow );
+		}
+
+		// Normalise the ref in the dest file so we can compare against the
+		// canonical template (which still contains the `__ref_replace_me__`
+		// placeholder).
+		$current = file_get_contents( $workflow );
+		$reset   = preg_replace( '#altis-ci\.yml@\S+#', 'altis-ci.yml@__ref_replace_me__', $current );
+
+		// Only re-pin when the file matches the template; if the user has
+		// customised it, leave it alone.
+		if ( md5( $reset ) !== md5( file_get_contents( $template ) ) ) {
+			return;
+		}
+
+		$package = $this->composer->getRepositoryManager()->getLocalRepository()->findPackage( 'altis/dev-tools', '*' );
+		if ( ! $package ) {
+			return;
+		}
+
+		// Get branch name or tag.
+		$ref = str_replace( 'dev-', '', $package->getPrettyVersion() );
+
+		// Write workflow with new ref.
+		$updated = str_replace( 'altis-ci.yml@__ref_replace_me__', "altis-ci.yml@{$ref}", $reset );
+		file_put_contents( $workflow, $updated );
 	}
 
 	/**
